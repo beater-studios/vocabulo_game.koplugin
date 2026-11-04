@@ -37,7 +37,25 @@ for _, lang in ipairs(Words.LANGUAGES) do
                 if not allowed[letter] then fail(label .. ": letra sem tecla: " .. word) end
             end
         end
-        print(string.format("%s: %d respostas", label, #answers))
+        -- The validator looks for "\nword\n", so the file format matters as much as the words.
+        local path = string.format("data/words/%s/guesses_%d.txt", lang, length)
+        local file = assert(io.open(path, "rb"))
+        local content = file:read("*a")
+        file:close()
+        if content:find("\r", 1, true) then fail(label .. ": tentativas com \\r") end
+        if content:sub(-1) ~= "\n" then fail(label .. ": tentativas sem quebra de linha no fim") end
+        local previous, guesses = nil, 0
+        for word in content:gmatch("([^\n]*)\n") do
+            guesses = guesses + 1
+            local letters = Engine.split(word)
+            if #letters ~= length then fail(label .. ": tentativa de tamanho errado: " .. word) end
+            for _, letter in ipairs(letters) do
+                if not allowed[letter] then fail(label .. ": tentativa com letra sem tecla: " .. word) break end
+            end
+            if previous and word <= previous then fail(label .. ": tentativas fora de ordem ou repetidas: " .. word) end
+            previous = word
+        end
+        print(string.format("%s: %d respostas, %d tentativas", label, #answers, guesses))
     end
 end
 
