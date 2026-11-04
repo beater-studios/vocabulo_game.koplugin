@@ -9,11 +9,12 @@ Como o jogo funciona por dentro, para quem quer entender o código ou mexer nas 
 - **Preto:** letra no lugar certo. **Cinza:** letra na palavra, em outro lugar. **Branco:** letra fora da palavra. Letras repetidas só são marcadas tantas vezes quantas existem na resposta.
 - Acentos e cedilha não são digitados e aparecem quando a palavra é revelada. Em espanhol, o `Ñ` é uma letra própria, com tecla própria.
 - **Palavra do dia:** vem da data local e da lista de respostas de cada combinação de idioma e tamanho. Quem usa a mesma configuração recebe a mesma palavra, sem internet. Ao fim da lista, a sequência recomeça.
-- **Modo livre:** palavras sorteadas das mesmas listas, sem limite por dia. Não conta para a sequência e tem contador próprio. O sorteio evita a palavra de hoje e as 30 últimas sorteadas, mas uma palavra pode reaparecer depois como palavra do dia. O resultado não é compartilhado.
-- O progresso é salvo a cada tentativa em `koreader/settings/vocabulo_game.lua`, e as estatísticas são separadas por combinação.
+- **Modo livre:** palavras sorteadas das mesmas listas, sem limite por dia. Não conta para a sequência e tem contador próprio. O sorteio evita a palavra de hoje, as dos próximos 30 dias e as 30 últimas sorteadas. Uma palavra jogada no modo livre ainda pode voltar como palavra do dia mais adiante, quando a lista dá a volta. O resultado não é compartilhado.
+- O progresso é salvo a cada tentativa em `koreader/settings/vocabulo_game.lua`, junto com a resposta, para que uma partida em andamento não mude se as listas forem atualizadas. As estatísticas são separadas por combinação.
+- A sequência só é recalculada quando uma partida termina. Na tela de estatísticas, ela aparece zerada se o último jogo foi antes de ontem.
 - O resultado pode ser compartilhado por QR code, com a grade em `■ ▣ □`, sem revelar letras.
 - Os textos da interface seguem o idioma escolhido. Na primeira abertura, o idioma vem da configuração do KOReader.
-- O jogo é sempre em retrato, como O Síndico, e não usa rede. Precisa de tela sensível ao toque.
+- O jogo é sempre em retrato, como O Síndico, e não usa rede. Precisa de tela sensível ao toque. Em aparelhos com botão Voltar, ele volta uma tela e, no menu, fecha o jogo.
 
 ## Estrutura
 
@@ -31,7 +32,7 @@ vocabulo_game.koplugin/
   tools/, tests/, docs/   desenvolvimento, fora do pacote publicado
 ```
 
-A grade e o teclado são desenhados por uma única widget, porque 30 botões do KOReader pesariam no e-ink. Cada letra atualiza só a própria linha.
+A grade e o teclado são desenhados por uma única widget, porque 30 botões do KOReader pesariam no e-ink. Cada letra atualiza no e-ink só a própria linha, e o cabeçalho quando a mensagem muda. Os textos das células e das teclas são montados uma vez e reaproveitados, porque a tela inteira é pintada de novo na memória a cada toque.
 
 As tentativas válidas ficam como uma única string em memória, com até 49 mil palavras, em vez de uma tabela Lua. Só a lista da combinação em jogo é carregada.
 
@@ -46,7 +47,9 @@ Geradas por `tools/words/build_words.py`, a partir das fontes baixadas por `tool
 
 Dois filtros são usados só na geração, sem ir para o jogo: as formas-base dos dicionários Hunspell de [wooorm/dictionaries](https://github.com/wooorm/dictionaries), que tiram flexões e nomes próprios, e o [LDNOOBW](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words) (CC BY 4.0).
 
-As respostas saem das 750 candidatas mais frequentes de cada lista, menos as palavras de `tools/words/exclude_<idioma>.txt`, limitadas a 500 e embaralhadas com semente fixa. Palavras fora das candidatas revisadas nunca viram resposta. Mudar a ordem ou o conteúdo das listas muda a palavra do dia de quem já joga, então isso deve ser evitado depois de publicar.
+As respostas saem das 750 candidatas mais frequentes de cada lista, menos as palavras de `tools/words/exclude_<idioma>.txt`, limitadas a 500 e embaralhadas com semente fixa. Palavras fora das candidatas revisadas nunca viram resposta.
+
+A ordem publicada em `answers_<n>.txt` é a sequência das palavras do dia, então o gerador a preserva: as palavras já publicadas ficam no mesmo lugar, uma palavra que passe a ser excluída ou bloqueada é trocada por uma nova na mesma posição, e palavras novas só entram no fim, até 500. Rodar o gerador de novo com as mesmas fontes não muda nada. Só quando falta substituta a lista encurta e a sequência muda a partir daquele ponto, e o gerador avisa. Para gerar uma lista do zero, apague o `answers_<n>.txt` correspondente antes.
 
 Critério das exclusões: palavras gramaticais, flexões, nomes próprios, gentílicos, meses, estrangeirismos, termos obscuros e tudo que seja ofensivo ou pesado para ver logo cedo (violência, morte, doença grave, drogas, religião e política partidária).
 
