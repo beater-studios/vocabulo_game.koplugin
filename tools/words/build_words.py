@@ -105,6 +105,30 @@ def candidates(sources, out_dir):
             print("%s %d: %d candidatas" % (lang, length, len(words)))
 
 
+def stable_answers(published, reviewed, excluded, blocked, lang, seed):
+    """Keeps the published order, so the word of the day does not change for anyone.
+
+    A published word that is now excluded or blocked gives its place to a new word.
+    New words only go to the end of the list, up to ANSWERS_PER_LIST.
+    """
+    published_keys = {plain(w, lang) for w in published}
+    removed = [w in excluded or plain(w, lang) in blocked for w in published]
+    fresh = [w for w in reviewed if w not in excluded and plain(w, lang) not in published_keys]
+    slots = sum(removed) + max(0, ANSWERS_PER_LIST - len(published))
+    new = fresh[:slots]
+    random.Random(seed).shuffle(new)
+    answers, shifted = [], False
+    for word, is_removed in zip(published, removed):
+        if not is_removed:
+            answers.append(word)
+        elif new:
+            answers.append(new.pop(0))
+        else:
+            shifted = True
+    answers.extend(new[:max(0, ANSWERS_PER_LIST - len(answers))])
+    return answers, shifted
+
+
 def build(sources):
     failed = False
     for lang in LANGUAGES:
@@ -113,13 +137,16 @@ def build(sources):
         lang_dir = os.path.join(OUTPUT, lang)
         os.makedirs(lang_dir, exist_ok=True)
         for length in LENGTHS:
+            answers_path = os.path.join(lang_dir, "answers_%d.txt" % length)
+            published = read_lines(answers_path) if os.path.exists(answers_path) else []
             # Only the candidates that went through review can become answers.
             reviewed = ranked_answers(lang, length, ranked, base_keys, blocked, set())[:CANDIDATES_PER_LIST]
-            words = [word for word in reviewed if word not in excluded][:ANSWERS_PER_LIST]
-            random.Random("%s-%d" % (lang, length)).shuffle(words)
+            words, shifted = stable_answers(published, reviewed, excluded, blocked, lang, "%s-%d" % (lang, length))
+            if shifted:
+                print("  %s %d: palavras removidas sem substituta, a palavra do dia muda a partir delas" % (lang, length))
             guesses = {k for k in guess_keys if len(k) == length and is_playable(k, lang)}
             guesses |= {plain(w, lang) for w in words}
-            write_lines(os.path.join(lang_dir, "answers_%d.txt" % length), words)
+            write_lines(answers_path, words)
             write_lines(os.path.join(lang_dir, "guesses_%d.txt" % length), sorted(guesses))
             print("%s %d: %d respostas, %d tentativas válidas" % (lang, length, len(words), len(guesses)))
             if len(words) < MINIMUM_ANSWERS:
