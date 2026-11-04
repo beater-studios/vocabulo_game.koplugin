@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## [Não publicado]
+## [1.1.0]
 
 - A mensagem de erro some da tela assim que você volta a digitar.
 - A sequência nas estatísticas zera quando você fica um dia sem jogar.
