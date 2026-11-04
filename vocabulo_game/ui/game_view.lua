@@ -41,6 +41,7 @@ local GameView = InputContainer:extend{
 
 function GameView:init()
     self.dimen = Geom:new{ x = 0, y = 0, w = self.width, h = self.height }
+    self.text_cache = {}
     self.ges_events = {
         Tap = { GestureRange:new{ ges = "tap", range = self.dimen } },
     }
@@ -138,20 +139,53 @@ function GameView:cell_rect(row, column)
     }
 end
 
+-- Rects below are relative to the view, except the ones given to the screen for refreshing.
 function GameView:row_rect(row)
     local first = self:cell_rect(row, 1)
-    return Geom:new{ x = first.x, y = first.y, w = self.engine.length * (self.cell + self.gap), h = self.cell }
+    local w = self.engine.length * self.cell + (self.engine.length - 1) * self.gap
+    return Geom:new{ x = self.dimen.x + first.x, y = self.dimen.y + first.y, w = w, h = self.cell }
 end
 
 function GameView:message_rect()
-    return Geom:new{ x = 0, y = 0, w = self.width, h = self.header_h }
+    return Geom:new{ x = self.dimen.x, y = self.dimen.y, w = self.width, h = self.header_h }
 end
 
-local function draw_text(bb, text, face, x, y, w, h, color, max_width)
-    local widget = TextWidget:new{ text = text, face = face, fgcolor = color, max_width = max_width or w }
+local function paint_centered(bb, widget, x, y, w, h)
     local size = widget:getSize()
     widget:paintTo(bb, x + math.floor((w - size.w) / 2), y + math.floor((h - size.h) / 2))
+end
+
+function GameView:draw_text(bb, text, face, x, y, w, h, color, max_width)
+    local widget = TextWidget:new{ text = text, face = face, fgcolor = color, max_width = max_width or w }
+    paint_centered(bb, widget, self.dimen.x + x, self.dimen.y + y, w, h)
     widget:free()
+end
+
+-- Cells and keys only show a few letters in a few styles, so their texts are built once and reused.
+function GameView:draw_cached_text(bb, text, face, style, x, y, w, h)
+    self.text_cache[face] = self.text_cache[face] or {}
+    local by_style = self.text_cache[face]
+    by_style[style] = by_style[style] or {}
+    local widget = by_style[style][text]
+    if not widget then
+        widget = TextWidget:new{ text = text, face = face, fgcolor = style.text, max_width = w }
+        by_style[style][text] = widget
+    end
+    paint_centered(bb, widget, self.dimen.x + x, self.dimen.y + y, w, h)
+end
+
+function GameView:free()
+    for _, by_style in pairs(self.text_cache) do
+        for _, by_text in pairs(by_style) do
+            for _, widget in pairs(by_text) do
+                widget:free()
+            end
+        end
+    end
+    self.text_cache = {}
+    if InputContainer.free then
+        InputContainer.free(self)
+    end
 end
 
 local STATE_STYLE = {
@@ -159,8 +193,11 @@ local STATE_STYLE = {
     [Engine.PRESENT] = { background = Blitbuffer.COLOR_GRAY, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_BLACK },
     [Engine.ABSENT] = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_DARK_GRAY, border = Blitbuffer.COLOR_GRAY },
 }
+local EMPTY_STYLE = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_GRAY }
+local PLAIN_STYLE = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_BLACK }
 
 function GameView:paint_box(bb, x, y, w, h, style, border_size)
+    x, y = self.dimen.x + x, self.dimen.y + y
     bb:paintRect(x, y, w, h, style.background)
     bb:paintBorder(x, y, w, h, border_size, style.border)
 end
@@ -190,17 +227,15 @@ end
 function GameView:paint_board(bb)
     local engine = self.engine
     local thin, thick = Screen:scaleBySize(1), Screen:scaleBySize(2)
-    local empty = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_GRAY }
-    local typed = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_BLACK }
     for row = 1, Engine.ATTEMPTS do
         local letters = self:row_letters(row)
         local result = engine.results[row]
         for column = 1, engine.length do
             local rect = self:cell_rect(row, column)
-            local style = result and STATE_STYLE[result[column]] or (letters[column] and typed or empty)
+            local style = result and STATE_STYLE[result[column]] or (letters[column] and PLAIN_STYLE or EMPTY_STYLE)
             self:paint_box(bb, rect.x, rect.y, rect.w, rect.h, style, (result or letters[column]) and thick or thin)
             if letters[column] then
-                draw_text(bb, letters[column], self.letter_face, rect.x, rect.y, rect.w, rect.h, style.text)
+                self:draw_cached_text(bb, letters[column], self.letter_face, style, rect.x, rect.y, rect.w, rect.h)
             end
         end
     end
@@ -208,38 +243,37 @@ end
 
 function GameView:paint_keyboard(bb)
     local states = self.engine:keyboard_states()
-    local plain = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_BLACK }
     local border = Screen:scaleBySize(1)
     for _, key in ipairs(self.keys) do
-        local style = STATE_STYLE[states[key.id]] or plain
+        local style = STATE_STYLE[states[key.id]] or PLAIN_STYLE
         self:paint_box(bb, key.x, key.y, key.w, key.h, style, border)
-        draw_text(bb, key.label, key.action and self.action_face or self.key_face, key.x, key.y, key.w, key.h, style.text)
+        self:draw_cached_text(bb, key.label, key.action and self.action_face or self.key_face, style, key.x, key.y, key.w, key.h)
     end
 end
 
 function GameView:paint_result_buttons(bb)
-    local style = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_BLACK }
+    local style = PLAIN_STYLE
     for _, button in ipairs(self.result_buttons) do
         self:paint_box(bb, button.x, button.y, button.w, button.h, style, Screen:scaleBySize(2))
-        draw_text(bb, button.label, self.button_face, button.x, button.y, button.w, button.h, style.text)
+        self:draw_text(bb, button.label, self.button_face, button.x, button.y, button.w, button.h, style.text)
     end
 end
 
 function GameView:paint_header(bb)
     local s = function(value) return Screen:scaleBySize(value) end
     local back = self.back_rect
-    local style = { background = Blitbuffer.COLOR_WHITE, text = Blitbuffer.COLOR_BLACK, border = Blitbuffer.COLOR_BLACK }
+    local style = PLAIN_STYLE
     self:paint_box(bb, back.x, back.y, back.w, back.h, style, s(2))
-    draw_text(bb, back.label, self.back_face, back.x, back.y, back.w, back.h, style.text, back.w - s(8))
+    self:draw_text(bb, back.label, self.back_face, back.x, back.y, back.w, back.h, style.text, back.w - s(8))
     local text_x = back.x + back.w + s(6)
     local text_w = self.width - 2 * text_x
     local mode_name = self.free_play and self.strings.free_play or self.strings.name
     local title = string.format("%s · %s", mode_name, string.format(self.strings.letters_count, self.engine.length))
-    draw_text(bb, title, self.title_face, text_x, s(8), text_w, s(32), Blitbuffer.COLOR_BLACK)
+    self:draw_text(bb, title, self.title_face, text_x, s(8), text_w, s(32), Blitbuffer.COLOR_BLACK)
     if self.message then
-        draw_text(bb, self.message, self.message_face, text_x, s(38), text_w, s(26), Blitbuffer.COLOR_BLACK)
+        self:draw_text(bb, self.message, self.message_face, text_x, s(38), text_w, s(26), Blitbuffer.COLOR_BLACK)
     end
-    bb:paintRect(0, self.header_h - s(1), self.width, s(1), Blitbuffer.COLOR_BLACK)
+    bb:paintRect(self.dimen.x, self.dimen.y + self.header_h - s(1), self.width, s(1), Blitbuffer.COLOR_BLACK)
 end
 
 function GameView:paintTo(bb, x, y)
@@ -254,9 +288,9 @@ function GameView:paintTo(bb, x, y)
     end
 end
 
-local function hit(rects, pos)
+local function hit(rects, x, y)
     for _, rect in ipairs(rects) do
-        if pos.x >= rect.x and pos.x < rect.x + rect.w and pos.y >= rect.y and pos.y < rect.y + rect.h then
+        if x >= rect.x and x < rect.x + rect.w and y >= rect.y and y < rect.y + rect.h then
             return rect
         end
     end
@@ -285,7 +319,8 @@ end
 
 function GameView:onTap(_, ges)
     local rects = self.engine:is_over() and self.result_buttons or self.keys
-    local target = hit(rects, ges.pos) or hit({ self.back_rect }, ges.pos)
+    local x, y = ges.pos.x - self.dimen.x, ges.pos.y - self.dimen.y
+    local target = hit(rects, x, y) or hit({ self.back_rect }, x, y)
     if target then
         self:press(target.id)
     end

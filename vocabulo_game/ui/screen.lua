@@ -28,6 +28,7 @@ local SERIF_BOLD = "noto/NotoSerif-Bold.ttf"
 local SERIF_ITALIC = "noto/NotoSerif-Italic.ttf"
 local LANGUAGE_NAMES = { pt = "Português", en = "English", es = "Español" }
 local RECENT_FREE_WORDS = 30
+local UPCOMING_DAILY_WORDS = 30
 
 local function load_table(path)
     local chunk = assert(loadfile(path))
@@ -55,6 +56,10 @@ function Screen:init()
         self.restore_rotation = rotation
         Device_screen:setRotationMode(Device_screen.DEVICE_ROTATED_UPRIGHT)
     end
+    if Device:hasKeys() then
+        self.key_events = { Close = { { Device.input.group.Back } } }
+    end
+    math.randomseed(os.time())
     self.dimen = Geom:new{ x = 0, y = 0, w = Device_screen:getWidth(), h = Device_screen:getHeight() }
     self.width, self.height = self.dimen.w, self.dimen.h
     self.margin = self:scaled(20)
@@ -84,6 +89,21 @@ function Screen:config_key()
     return self.lang .. "_" .. self.length
 end
 
+-- Only the lists of the combination in play stay in memory.
+function Screen:word_lists()
+    local key = self:config_key()
+    if not self.lists or self.lists.key ~= key then
+        -- Dropped first, so the old and the new lists are not both held while loading.
+        self.lists = nil
+        self.lists = {
+            key = key,
+            answers = Words.load_answers(self.plugin_dir, self.lang, self.length),
+            is_valid = Words.load_validator(self.plugin_dir, self.lang, self.length),
+        }
+    end
+    return self.lists
+end
+
 function Screen:save()
     self.settings:saveSetting("lang", self.lang)
     self.settings:saveSetting("length", self.length)
@@ -99,6 +119,7 @@ function Screen:set_widget(widget, refresh)
     if self[1] then
         self[1]:free()
     end
+    -- Read by tools/koreader/check_layout.lua to catch pages taller than the screen.
     self.content_height = widget:getSize().h
     self[1] = widget
     UIManager:setDirty(self, function()
@@ -167,14 +188,14 @@ function Screen:option_row(options, selected, on_select)
     return row
 end
 
-function Screen:saved_game()
+function Screen:saved_game(day)
     local saved = self.games[self:config_key()]
-    if saved and saved.day == Engine.today() then
+    if saved and saved.day == (day or Engine.today()) then
         return saved
     end
 end
 
-function Screen:show_title()
+function Screen:show_title(refresh)
     self.mode = "title"
     local t = self:strings()
     local group = VerticalGroup:new{ align = "center" }
@@ -196,7 +217,7 @@ function Screen:show_title()
     add(self:centered(self:option_row(languages, self.lang, function(value)
         self.lang = value
         self:save()
-        self:show_title()
+        self:show_title("ui")
     end)))
     space(14)
     add(self:centered(self:text_line(t.letters, SERIF_ITALIC, 18)))
@@ -208,7 +229,7 @@ function Screen:show_title()
     add(self:centered(self:option_row(lengths, self.length, function(value)
         self.length = value
         self:save()
-        self:show_title()
+        self:show_title("ui")
     end)))
     space(26)
 
@@ -232,26 +253,23 @@ function Screen:show_title()
         add(self:centered(self:menu_button(item[1], item[2])))
         space(8)
     end
-    self:set_page(CenterContainer:new{ dimen = Geom:new{ w = self.width, h = self.height }, group }, "full")
+    self:set_page(CenterContainer:new{ dimen = Geom:new{ w = self.width, h = self.height }, group }, refresh or "full")
     self.content_height = group:getSize().h
 end
 
-function Screen:start_game()
-    local answers = Words.load_answers(self.plugin_dir, self.lang, self.length)
-    local day = Engine.today()
-    self:open_game{ day = day, answer = Engine.answer_for_day(answers, day), saved = self:saved_game() }
+-- The day is kept when coming back from the statistics, even if the date changed meanwhile.
+function Screen:start_game(day)
+    day = day or Engine.today()
+    local saved = self:saved_game(day)
+    local answer = saved and saved.answer or Engine.answer_for_day(self:word_lists().answers, day)
+    self:open_game{ day = day, answer = answer, saved = saved }
 end
 
 function Screen:pick_free_word()
     local key = self:config_key()
-    local answers = Words.load_answers(self.plugin_dir, self.lang, self.length)
-    local today = Engine.plain(Engine.answer_for_day(answers, Engine.today()), self.lang)
+    local answers = self:word_lists().answers
     local recent = self.free_recent[key] or {}
-    local avoided = { [today] = true }
-    for _, word in ipairs(recent) do
-        avoided[word] = true
-    end
-    math.randomseed(os.time())
+    local avoided = Engine.free_avoided(answers, self.lang, Engine.today(), UPCOMING_DAILY_WORDS, recent)
     local answer = Engine.pick_free(answers, self.lang, avoided, math.random)
     table.insert(recent, Engine.plain(answer, self.lang))
     while #recent > RECENT_FREE_WORDS do
@@ -281,7 +299,7 @@ function Screen:open_game(opts)
         length = self.length,
         day = opts.day,
         answer = answer,
-        is_valid = Words.load_validator(self.plugin_dir, self.lang, self.length),
+        is_valid = self:word_lists().is_valid,
     }
     if opts.saved then
         self.engine:restore(opts.saved)
@@ -301,7 +319,7 @@ function Screen:open_game(opts)
         on_change = function(change) self:on_game_change(change) end,
         on_back = function() self:show_title() end,
         on_share = function() self:share_result() end,
-        on_stats = function() self:show_stats(function() self:start_game() end) end,
+        on_stats = function() self:show_stats(function() self:start_game(opts.day) end) end,
     }
     self.view.message = self:game_message()
     self:set_widget(self.view, "full")
@@ -327,11 +345,18 @@ end
 function Screen:on_game_change(change)
     local view, engine = self.view, self.engine
     if change == "letter" then
-        view.message = self:game_message()
+        local message = self:game_message()
+        if message ~= view.message then
+            view.message = message
+            self:refresh_view("ui", view:message_rect())
+        end
         self:refresh_view("ui", view:row_rect(#engine.guesses + 1))
         return
     end
     local ok, reason = engine:submit()
+    if reason == "over" then
+        return
+    end
     if not ok then
         local t = self:strings()
         view.message = reason == "short" and t.short or t.unknown
@@ -366,6 +391,7 @@ end
 
 function Screen:show_page(title, items, back)
     self.mode = "page"
+    self.page_back = back
     local t = self:strings()
     local group = VerticalGroup:new{ align = "center" }
     group[#group + 1] = self:centered(self:text_line(title, SERIF_BOLD, 26), self:scaled(60))
@@ -426,7 +452,7 @@ function Screen:show_stats(back)
     local lines = {
         string.format("%s: %d", t.played, stats.played),
         string.format("%s: %d%%", t.win_rate, win_rate),
-        string.format("%s: %d", t.streak, stats.streak),
+        string.format("%s: %d", t.streak, Engine.current_streak(stats, Engine.today())),
         string.format("%s: %d", t.best_streak, stats.best_streak),
     }
     local free = self.free_stats[self:config_key()] or { played = 0, won = 0 }
@@ -438,7 +464,7 @@ function Screen:show_stats(back)
     self:show_page(t.stats, {
         { title = string.format("%s · %s", LANGUAGE_NAMES[self.lang], string.format(t.letters_count, self.length)), text = table.concat(lines, "\n") },
         { title = t.distribution, text = table.concat(bars, "\n") },
-        { title = t.free_play, text = string.format("%s: %d\n%s: %d", t.played, free.played, t.win_rate, free.won) },
+        { title = t.free_play, text = string.format("%s: %d\n%s: %d", t.played, free.played, t.wins, free.won) },
     }, back)
 end
 
@@ -446,7 +472,24 @@ function Screen:onSetRotationMode()
     return true
 end
 
+-- The device Back key goes back one screen, and closes the game from the title screen.
+function Screen:onClose()
+    if self.mode == "game" then
+        self:show_title()
+    elseif self.mode == "page" then
+        self.page_back()
+    else
+        UIManager:close(self)
+    end
+    return true
+end
+
 function Screen:onCloseWidget()
+    if self[1] then
+        self[1]:free()
+        self[1] = nil
+    end
+    self.lists = nil
     if self.restore_rotation then
         Device_screen:setRotationMode(self.restore_rotation)
     end

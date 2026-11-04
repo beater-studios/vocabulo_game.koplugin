@@ -91,7 +91,18 @@ function Engine.answer_for_day(answers, day)
     return answers[day % #answers + 1]
 end
 
--- Free play shares the daily lists, so it skips today's word and the ones played recently.
+-- Free play shares the daily lists, so it skips the daily words of the coming days and the ones played recently.
+function Engine.free_avoided(answers, lang, today, upcoming_days, recent)
+    local avoided = {}
+    for day = today, today + upcoming_days do
+        avoided[Engine.plain(Engine.answer_for_day(answers, day), lang)] = true
+    end
+    for _, word in ipairs(recent) do
+        avoided[word] = true
+    end
+    return avoided
+end
+
 function Engine.pick_free(answers, lang, avoided, random)
     local candidates = {}
     for _, word in ipairs(answers) do
@@ -128,8 +139,9 @@ function Engine:restore(saved)
     self.current = {}
 end
 
+-- The answer is saved too, so a game in progress survives an update of the word lists.
 function Engine:serialize()
-    return { day = self.day, guesses = self.guesses }
+    return { day = self.day, answer = self.answer, guesses = self.guesses }
 end
 
 function Engine:is_won()
@@ -208,6 +220,14 @@ function Engine.record_result(stats, day, won, attempts)
     end
     stats.last_day = day
     return stats
+end
+
+-- The saved streak only changes when a game ends, so a missed day has to be checked when showing it.
+function Engine.current_streak(stats, today)
+    if stats.last_day and today - stats.last_day > 1 then
+        return 0
+    end
+    return stats.streak
 end
 
 function Engine:share_text(title)
