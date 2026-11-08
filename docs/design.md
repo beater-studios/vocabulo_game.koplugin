@@ -15,6 +15,7 @@ Como o jogo funciona por dentro, para quem quer entender o código ou mexer nas 
 - O resultado pode ser compartilhado por QR code, com a grade em `■ ▣ □`, sem revelar letras.
 - Os textos da interface seguem o idioma escolhido. Na primeira abertura, o idioma vem da configuração do KOReader.
 - O jogo é sempre em retrato, como O Síndico, e não usa rede. Precisa de tela sensível ao toque. Em aparelhos com botão Voltar, ele volta uma tela e, no menu, fecha o jogo.
+- **Tela de descanso:** se o aparelho dorme com o jogo aberto e a tela de descanso do KOReader está no modo de capa do livro, aparece a capa do Vocábulo no lugar. Com o jogo fechado, em outro modo, ao desligar ou ao reiniciar, nada muda.
 
 ## Estrutura
 
@@ -26,11 +27,15 @@ vocabulo_game.koplugin/
     words.lua             carrega as listas
     ui/screen.lua         tela inicial, estatísticas, ajuda e sobre
     ui/game_view.lua      grade e teclado, desenhados direto na tela
+    screensaver.lua       capa do jogo na tela de descanso
   data/
     i18n.lua              textos nos três idiomas
     words/<idioma>/       answers_<n>.txt e guesses_<n>.txt
+  assets/screensaver.png  capa em tela cheia, 1200x1600
   tools/, tests/, docs/   desenvolvimento, fora do pacote publicado
 ```
+
+A capa da tela de descanso entra embrulhando `Screensaver.setup` do KOReader: ele escolhe a imagem como sempre, e o jogo só a troca pela própria capa quando a tela do Vocábulo é a janela de tela cheia no topo. Nenhuma configuração é gravada, então não há o que desfazer ao acordar. A troca só acontece com `screensaver_type` em `cover` e no descanso comum, não ao desligar ou reiniciar. A imagem tem 1200x1600, o dobro de 600x800, para ficar nítida em telas maiores; nas de 600x800, o KOReader a reduz pela metade. A arte sai de `KOREADER_DIR=<KOReader de desktop> python3 -I tools/make_screensaver.py`, que usa o Pillow e a Noto Serif do KOReader.
 
 A grade e o teclado são desenhados por uma única widget, porque 30 botões do KOReader pesariam no e-ink. Cada letra atualiza no e-ink só a própria linha, e o cabeçalho quando a mensagem muda. Os textos das células e das teclas são montados uma vez e reaproveitados, porque a tela inteira é pintada de novo na memória a cada toque.
 
@@ -68,7 +73,7 @@ python3 -I tools/words/build_words.py /pasta/vazia build
 - `luajit tools/validate_words.lua`: confere as listas e se os textos existem nos três idiomas.
 - `luajit tests/engine_spec.lua`: testes do motor.
 - `tools/package.sh`: gera o zip e o checksum. Exige o arquivo `LICENSE`.
-- Com `KOREADER_DIR` apontando para um KOReader de desktop: `tools/koreader/run_emulator.sh` abre o jogo numa janela, e `tools/koreader/check_all_sizes.sh` joga todas as combinações pelos toques em quatro tamanhos de tela. Com `OUTPUT_DIR`, `tools/koreader/run_headless.sh` e os scripts dessa pasta salvam as telas em PNG.
+- Com `KOREADER_DIR` apontando para um KOReader de desktop: `tools/koreader/run_emulator.sh` abre o jogo numa janela, e `tools/koreader/check_all_sizes.sh` joga todas as combinações pelos toques em quatro tamanhos de tela. Com `OUTPUT_DIR`, `tools/koreader/run_headless.sh` e os scripts dessa pasta salvam as telas em PNG. `tools/koreader/check_screensaver.lua`, rodado pelo `run_headless.sh`, confere quando a capa do jogo entra na tela de descanso e salva a tela resultante.
 
 O emulador não mostra o que é próprio do e-ink nem a velocidade do aparelho: a conferência final é num aparelho real.
 

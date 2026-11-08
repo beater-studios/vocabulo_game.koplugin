@@ -1,9 +1,12 @@
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 
+local GameScreensaver = require("vocabulo_game/screensaver")
 local Screen = require("vocabulo_game/ui/screen")
 
 local PLUGIN_DIR = debug.getinfo(1, "S").source:gsub("^@", ""):match("(.*)/") or "."
+
+GameScreensaver.install(PLUGIN_DIR)
 
 local VocabuloGame = WidgetContainer:extend{
     name = "vocabulo_game",

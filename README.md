@@ -19,6 +19,7 @@ Um jogo da [Beater Studios](https://beaterstudios.com/).
 - **Acentos:** você digita sem acento nem cedilha, e eles aparecem quando a palavra é revelada. Em espanhol, o Ñ tem tecla própria.
 - **Estatísticas:** sequência de vitórias e tentativas por idioma e tamanho.
 - **Compartilhar:** o resultado do dia vira um QR code, sem revelar as letras.
+- **Tela de descanso:** se o aparelho dorme com o jogo aberto, aparece a capa do Vocábulo no lugar da capa do livro. Vale quando a tela de descanso do KOReader mostra a capa do livro.
 - **Sem internet:** funciona offline e não coleta dados. O progresso é salvo a cada tentativa.
 
 ## Instalação

@@ -10,7 +10,7 @@ for file in LICENSE NOTICE; do
 done
 rm -rf dist
 mkdir -p "dist/stage/$name"
-cp -R _meta.lua main.lua LICENSE NOTICE vocabulo_game data "dist/stage/$name/"
+cp -R _meta.lua main.lua LICENSE NOTICE vocabulo_game data assets "dist/stage/$name/"
 find dist/stage \( -name '._*' -o -name '.DS_Store' \) -delete
 (cd dist/stage && zip -qrX "../$name.zip" "$name")
 rm -rf dist/stage

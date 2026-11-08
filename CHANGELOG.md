@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## [1.2.1]
+
+- Com o jogo aberto, a tela de descanso mostra a capa do Vocábulo no lugar da capa do livro.
+
 ## [1.2.0]
 
 - Mais 250 palavras do dia em português em cada tamanho, agora 750, com palavras comuns que antes ficavam de fora, como escola, música e livro.

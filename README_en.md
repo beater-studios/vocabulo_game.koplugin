@@ -19,6 +19,7 @@ A game by [Beater Studios](https://beaterstudios.com/).
 - **Accents:** you type without accents, and they appear when the word is revealed. In Spanish, Ñ has its own key.
 - **Statistics:** win streak and attempts by language and length.
 - **Sharing:** the daily result becomes a QR code that does not reveal the letters.
+- **Sleep screen:** if the device sleeps with the game open, it shows the Vocábulo cover instead of the book cover. This applies when the KOReader sleep screen is set to show the book cover.
 - **No internet:** it works offline and collects no data. Progress is saved after every attempt.
 
 ## Installation
