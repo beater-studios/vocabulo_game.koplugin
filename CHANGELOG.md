@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## [1.2.0]
+
+- Mais 250 palavras do dia em português em cada tamanho, agora 750, com palavras comuns que antes ficavam de fora, como escola, música e livro.
+- Mais palavras do dia em inglês e espanhol, agora 750 em cada tamanho (744 em espanhol com 5 letras).
+- As palavras do dia já publicadas continuam as mesmas, na mesma ordem.
+
 ## [1.1.0]
 
 - A mensagem de erro some da tela assim que você volta a digitar.

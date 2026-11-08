@@ -15,8 +15,8 @@ OUTPUT = os.path.join(ROOT, "data", "words")
 LENGTHS = (5, 6, 7)
 LANGUAGES = ("pt", "en", "es")
 KEPT_LETTERS = {"pt": "", "en": "", "es": "ñ"}
-CANDIDATES_PER_LIST = 750
-ANSWERS_PER_LIST = 500
+CANDIDATES_PER_LIST = 1200
+ANSWERS_PER_LIST = 750
 MINIMUM_ANSWERS = 365
 
 
@@ -41,33 +41,70 @@ def read_lines(path):
 
 
 def read_stems(sources, lang):
-    stems = set()
+    """Returns the lowercase stems and, lowercased, the ones the dictionary only has capitalized.
+
+    Both keep their accents, so a place like Choró does not remove the word choro.
+    """
+    lower, capitalized = set(), set()
     for line in read_lines(os.path.join(sources, lang + "_stems.dic"))[1:]:
         stem = line.split("/")[0].split("\t")[0].strip()
-        if stem and stem == stem.lower():
-            stems.add(stem)
-    return stems
+        if not stem:
+            continue
+        if stem == stem.lower():
+            lower.add(stem)
+        elif stem[0].isupper():
+            capitalized.add(stem.lower())
+    return lower, capitalized - lower
+
+
+PT_PLURAL_SUFFIXES = (("ões", "ão"), ("ães", "ão"), ("ãos", "ão"), ("ns", "m"), ("eis", "il"), ("is", "il"),
+                      ("is", "l"), ("es", ""), ("s", ""))
+# These plurals can move the accent (papéis/papel, meses/mês), so their singular is compared without accents.
+# Doing the same for -s would take pires for the plural of piré.
+PT_ACCENT_SHIFT_SUFFIXES = ("is", "es")
+
+
+def is_pt_plural(word, lexicon, lexicon_keys):
+    for suffix, singular in PT_PLURAL_SUFFIXES:
+        if word.endswith(suffix):
+            stem = word[: -len(suffix)] + singular
+            if stem in lexicon or (suffix.endswith(PT_ACCENT_SHIFT_SUFFIXES) and plain(stem, "pt") in lexicon_keys):
+                return True
+    return False
+
+
+def pt_base_keys(sources, lexicon):
+    # The Hunspell stems miss common nouns that the dictionary derives from verbs or masculine forms
+    # (escola, livro, música), so the lexicon is the base. Hunspell only removes the words it knows
+    # just capitalized, which catches part of the proper names and also a few common words.
+    lexicon_keys = {plain(w, "pt") for w in lexicon}
+    _, names = read_stems(sources, "pt")
+    base_keys = set()
+    for word in lexicon:
+        key = plain(word, "pt")
+        if len(key) in LENGTHS and word not in names and not is_pt_plural(word, lexicon, lexicon_keys):
+            base_keys.add(key)
+    return base_keys
 
 
 def load_language(sources, lang):
     blocked = {plain(w.lower(), lang) for w in read_lines(os.path.join(sources, lang + "_blocklist"))}
-    stems = read_stems(sources, lang)
     if lang == "pt":
         lexicon = set(read_lines(os.path.join(sources, "pt_lexicon")))
         conjugations = read_lines(os.path.join(sources, "pt_conjugations"))
         blocked |= {plain(w.lower(), lang) for w in read_lines(os.path.join(sources, "pt_negative"))}
         ranked = [line.split(",")[0] for line in read_lines(os.path.join(sources, "pt_icf"))[:60000]]
-        base = lexicon & stems
+        base_keys = pt_base_keys(sources, lexicon)
         guesses = lexicon | set(conjugations)
     else:
         ranked = [line.split()[0] for line in read_lines(os.path.join(sources, lang + "_frequency"))]
-        base = stems
+        stems, _ = read_stems(sources, lang)
+        base_keys = {plain(w, lang) for w in stems}
         if lang == "es":
             with open(os.path.join(sources, "es_words.json"), encoding="utf-8") as f:
                 guesses = set(json.load(f))
         else:
             guesses = set(read_lines(os.path.join(sources, "en_words")))
-    base_keys = {plain(w, lang) for w in base}
     guess_keys = {plain(w, lang) for w in guesses}
     return ranked, base_keys, guess_keys, blocked
 
