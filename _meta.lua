@@ -1,7 +1,7 @@
 return {
     fullname = "Vocábulo",
     description = [[Uma palavra nova por dia, ou quantas quiser, em português, inglês ou espanhol, com 5, 6 ou 7 letras. Por Beater Studios.]],
-    version = "1.2.1",
+    version = "1.2.2",
     author = "Beater Studios",
     copyright = "Copyright (C) 2026 Beater Studios",
     website = "https://beaterstudios.com/",

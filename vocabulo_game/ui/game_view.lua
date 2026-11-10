@@ -7,15 +7,12 @@ local InputContainer = require("ui/widget/container/inputcontainer")
 local TextWidget = require("ui/widget/textwidget")
 
 local Engine = require("vocabulo_game/engine")
+local Keyboard = require("vocabulo_game/keyboard")
 
 local Screen = Device.screen
 
 local SERIF_BOLD = "noto/NotoSerif-Bold.ttf"
 local SERIF_ITALIC = "noto/NotoSerif-Italic.ttf"
-local KEY_ROWS = {
-    default = { "qwertyuiop", "asdfghjkl", "zxcvbnm" },
-    es = { "qwertyuiop", "asdfghjklñ", "zxcvbnm" },
-}
 local BACKSPACE = "backspace"
 local SUBMIT = "submit"
 
@@ -59,7 +56,7 @@ function GameView:compute_layout()
     self.margin, self.gap = margin, gap
     self.header_h = s(66)
 
-    local rows = KEY_ROWS[self.engine.lang] or KEY_ROWS.default
+    local rows = Keyboard.rows(self.engine.lang)
     local key_gap = s(4)
     local key_w = math.floor((W - 2 * margin - 9 * key_gap) / 10)
     local key_h = s(46)

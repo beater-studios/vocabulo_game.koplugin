@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## [1.2.2]
+
+- A ajuda em inglês também explica que não é preciso digitar acentos.
+- Se o jogo não conseguir abrir, aparece um aviso, e o KOReader continua funcionando e na mesma orientação de antes.
+- Um progresso salvo com defeito não impede mais o jogo de abrir: só a partida afetada é descartada, e as estatísticas ficam.
+- Com o relógio do aparelho atrasado, um dia já jogado não conta de novo nas estatísticas.
+- Durante a partida, a tela pisca uma vez a cada 8 atualizações para limpar os rastros do e-ink, em vez de piscar num momento qualquer.
+- Em aparelhos com botão Voltar, sair do KOReader com o jogo aberto fecha o jogo e devolve a orientação da tela.
+- As listas de palavras são geradas a partir de versões fixas das fontes, conferidas por checksum, e as palavras novas só saem de uma lista revisada. As listas publicadas não mudam.
+
 ## [1.2.1]
 
 - Com o jogo aberto, a tela de descanso mostra a capa do Vocábulo no lugar da capa do livro.

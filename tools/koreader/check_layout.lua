@@ -202,15 +202,86 @@ UIManager:close(UIManager._window_stack[#UIManager._window_stack].widget)
 local reopened = GameScreen:new{ plugin_dir = plugin_dir }
 if reopened.lang ~= "es" or reopened.length ~= 5 then problem("configuração não foi salva") end
 
-local initial_rotation = Screen:getRotationMode()
-Screen:setRotationMode(Screen.DEVICE_ROTATED_CLOCKWISE)
-local rotated = GameScreen:new{ plugin_dir = plugin_dir }
-rotated:start_game()
-if Screen:getWidth() > Screen:getHeight() then problem("não voltou para retrato") end
-shot(rotated, "opened_in_landscape")
-rotated:onCloseWidget()
-if Screen:getRotationMode() ~= Screen.DEVICE_ROTATED_CLOCKWISE then problem("rotação não foi restaurada") end
-Screen:setRotationMode(initial_rotation)
+local meta = dofile(plugin_dir .. "/_meta.lua")
+for _, lang in ipairs(Words.LANGUAGES) do
+    reopened.lang = lang
+    local found = false
+    for _, item in ipairs(reopened:about_items()) do
+        if (item.meta or ""):find(meta.version, 1, true) then found = true end
+    end
+    if not found then problem("versão ausente na tela Sobre em " .. lang) end
+end
+
+-- A daily game in progress comes back in a new screen opened with the same settings.
+reopened.games, reopened.lang, reopened.length = {}, "pt", 6
+reopened:start_game()
+local first_guess
+for _, word in ipairs(reopened:word_lists().answers) do
+    first_guess = Engine.plain(word, "pt")
+    if first_guess ~= reopened.engine.answer_key then break end
+end
+type_word(reopened, first_guess)
+local resumed = GameScreen:new{ plugin_dir = plugin_dir }
+if resumed.lang ~= "pt" or resumed.length ~= 6 then problem("idioma e tamanho não voltaram na tela nova") end
+resumed:start_game()
+if #resumed.engine.guesses ~= 1 or resumed.engine.guesses[1] ~= first_guess or resumed.engine.answer ~= reopened.engine.answer then
+    problem("partida em andamento não voltou na tela nova")
+end
+
+-- Refresh modes: a new layout flashes, a change inside it does not, the 9th change in a row flashes, and
+-- the end of a game flashes. Nothing asks for "partial", which KOReader counts towards its own flashes.
+local real_set_dirty = UIManager.setDirty
+local log = {}
+UIManager.setDirty = function(_, widget, refresh)
+    if widget == resumed then
+        log[#log + 1] = type(refresh) == "function" and (refresh()) or refresh
+    end
+end
+local function modes(action)
+    log = {}
+    action()
+    return table.concat(log, ",")
+end
+local function expect(name, actual, wanted)
+    if actual ~= wanted then problem(string.format("pintura em %s: %s, esperado %s", name, actual, wanted)) end
+end
+resumed.games = {}
+resumed:show_help()
+expect("tela inicial", modes(function() resumed:show_title() end), "full")
+local changes = {}
+for i = 1, 9 do changes[i] = modes(function() resumed:show_title() end) end
+expect("troca de opções", table.concat(changes, ","), "ui,ui,ui,ui,ui,ui,ui,ui,full")
+expect("abrir partida", modes(function() resumed:start_game() end), "full")
+local wrong = {}
+for _, word in ipairs(resumed:word_lists().answers) do
+    local key = Engine.plain(word, "pt")
+    if key ~= resumed.engine.answer_key then wrong[#wrong + 1] = key end
+    if #wrong == 2 then break end
+end
+local letters = string.rep("ui,", resumed.length)
+expect("digitar e enviar", modes(function() type_word(resumed, wrong[1]) end), letters .. "ui")
+expect("vitória", modes(function() type_word(resumed, resumed.engine.answer_key) end), letters .. "full")
+expect("página", modes(function() resumed:show_about() end), "full")
+UIManager.setDirty = real_set_dirty
+
+-- Back goes back one screen and closes from the title; KOReader's Close closes, except before a shutdown.
+local back = GameScreen:new{ plugin_dir = plugin_dir }
+UIManager:show(back)
+back:start_game()
+back:onBack()
+if back.mode ~= "title" or not UIManager:isWidgetShown(back) then problem("Voltar na partida não voltou ao menu") end
+back:show_help()
+back:onBack()
+if back.mode ~= "title" then problem("Voltar na ajuda não voltou ao menu") end
+back:onClose({ keep_screensaver = true })
+if not UIManager:isWidgetShown(back) then problem("Close antes de desligar fechou a janela") end
+back:onBack()
+if UIManager:isWidgetShown(back) then problem("Voltar no menu não fechou o jogo") end
+local closing = GameScreen:new{ plugin_dir = plugin_dir }
+UIManager:show(closing)
+closing:start_game()
+closing:onClose()
+if UIManager:isWidgetShown(closing) then problem("Close do KOReader não fechou a janela") end
 
 print("problemas: " .. problems)
 os.exit(problems == 0 and 0 or 1)

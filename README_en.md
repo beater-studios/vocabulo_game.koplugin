@@ -42,9 +42,10 @@ Progress is stored in `koreader/settings/vocabulo_game.lua`. To uninstall, delet
 With [LuaJIT](https://luajit.org) installed, from the repository root:
 
 ```sh
-luajit tools/validate_words.lua
-luajit tests/engine_spec.lua
+sh tools/check.sh
 ```
+
+It checks the word lists and the texts, runs the tests and builds the package in `dist/`.
 
 The rules, word list generation, remaining tools and release process are described in [docs/design.md](docs/design.md), in Portuguese. To suggest removing a word, open an issue. Contributions are accepted under the project's license.
 
@@ -52,6 +53,6 @@ The rules, word list generation, remaining tools and release process are describ
 
 [GPL-3.0](LICENSE), version 3 only. You may use, study, modify and redistribute it, keeping it open under the same license.
 
-The word lists derive from fserb/pt-br, dwyl/english-words, an-array-of-spanish-words and FrequencyWords. Credits and licenses for each are in [NOTICE](NOTICE).
+The word lists derive from fserb/pt-br, dwyl/english-words, an-array-of-spanish-words and FrequencyWords. The English and Spanish answers were chosen by FrequencyWords frequencies, under CC BY-SA 4.0, a license compatible with GPL-3.0. Credits and licenses for each are in [NOTICE](NOTICE).
 
 These terms grant no rights to the names "Vocábulo" and "Beater Studios". For other uses, contact [Beater Studios](https://beaterstudios.com/).

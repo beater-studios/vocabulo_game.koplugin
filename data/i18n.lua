@@ -1,6 +1,7 @@
 return {
     pt = {
         name = "Vocábulo",
+        open_failed = "Não foi possível abrir o Vocábulo. Tente reiniciar o KOReader.",
         free_play = "Modo Livre",
         free_resume = "Continuar Modo Livre",
         new_word = "Nova Palavra",
@@ -48,6 +49,7 @@ return {
     },
     en = {
         name = "Vocábulo",
+        open_failed = "Vocábulo could not open. Try restarting KOReader.",
         free_play = "Free Play",
         free_resume = "Continue Free Play",
         new_word = "New Word",
@@ -88,12 +90,14 @@ return {
         help_items = {
             { title = "The goal", text = "Find the word of the day in up to 6 attempts. Each attempt must be a real word." },
             { title = "The colors", text = "Black: the letter is in the right place.\nGray: the letter is in the word, somewhere else.\nWhite: the letter is not in the word." },
+            { title = "Accents", text = "You don't need to type accents or the cedilla. They show up when the word is revealed. In Spanish, Ñ is a letter of its own." },
             { title = "One word a day", text = "Each language and length has its own word, the same for everyone using the same settings." },
             { title = "Free play", text = "Play as many random words as you like. It does not count toward your daily streak." },
         },
     },
     es = {
         name = "Vocábulo",
+        open_failed = "No se pudo abrir Vocábulo. Prueba a reiniciar KOReader.",
         free_play = "Modo Libre",
         free_resume = "Continuar Modo Libre",
         new_word = "Nueva Palabra",

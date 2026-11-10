@@ -10,7 +10,7 @@ NAMES: as an additional term under section 7(e) of the GNU General Public Licens
 
 WORD LISTS
 
-The files in data/words/ are derived from the sources below. The selection of answers, the reviewed exclusions in tools/words/ and the order of the lists are part of this project.
+The files in data/words/ are derived from the sources below. The selection of answers, the reviewed approved and excluded lists in tools/words/ and the order of the lists are part of this project. tools/words/fetch_sources.sh downloads each source at a fixed commit and checks it against tools/words/sources.sha256.
 
 - Portuguese words and frequency: fserb/pt-br, https://github.com/fserb/pt-br, MIT License, Copyright 2021 Fernando Serboncini.
 - English guesses: dwyl/english-words, https://github.com/dwyl/english-words, The Unlicense.

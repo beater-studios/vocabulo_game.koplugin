@@ -1,3 +1,6 @@
+local Calendar = require("vocabulo_game/calendar")
+local Letters = require("vocabulo_game/letters")
+
 local Engine = {}
 Engine.__index = Engine
 
@@ -6,46 +9,15 @@ Engine.CORRECT = "correct"
 Engine.PRESENT = "present"
 Engine.ABSENT = "absent"
 
-local EPOCH_DAY = 20454 -- 2026-01-01
-
-local ACCENTS = {
-    ["á"] = "a", ["à"] = "a", ["â"] = "a", ["ã"] = "a", ["ä"] = "a",
-    ["é"] = "e", ["ê"] = "e", ["è"] = "e", ["ë"] = "e",
-    ["í"] = "i", ["î"] = "i", ["ì"] = "i", ["ï"] = "i",
-    ["ó"] = "o", ["ô"] = "o", ["õ"] = "o", ["ò"] = "o", ["ö"] = "o",
-    ["ú"] = "u", ["û"] = "u", ["ù"] = "u", ["ü"] = "u",
-    ["ç"] = "c", ["ñ"] = "n",
-}
 local KEPT_LETTERS = { es = { ["ñ"] = true } }
 
-local UPPER = {
-    ["á"] = "Á", ["à"] = "À", ["â"] = "Â", ["ã"] = "Ã", ["ä"] = "Ä",
-    ["é"] = "É", ["ê"] = "Ê", ["è"] = "È", ["ë"] = "Ë",
-    ["í"] = "Í", ["î"] = "Î", ["ì"] = "Ì", ["ï"] = "Ï",
-    ["ó"] = "Ó", ["ô"] = "Ô", ["õ"] = "Õ", ["ò"] = "Ò", ["ö"] = "Ö",
-    ["ú"] = "Ú", ["û"] = "Û", ["ù"] = "Ù", ["ü"] = "Ü",
-    ["ç"] = "Ç", ["ñ"] = "Ñ",
-}
+Engine.split = Letters.split
+Engine.upper = Letters.upper
+Engine.lower = Letters.lower
 
-function Engine.upper(letter)
-    return UPPER[letter] or letter:upper()
-end
-
-function Engine.split(word)
-    local letters = {}
-    for char in word:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
-        letters[#letters + 1] = char
-    end
-    return letters
-end
-
+-- Without accents and cedilla, keeping the letters the language types as they are (ñ in Spanish).
 function Engine.plain(word, lang)
-    local kept = KEPT_LETTERS[lang] or {}
-    local out = {}
-    for _, char in ipairs(Engine.split(word)) do
-        out[#out + 1] = (not kept[char] and ACCENTS[char]) or char
-    end
-    return table.concat(out)
+    return Letters.plain(word, KEPT_LETTERS[lang])
 end
 
 -- Repeated letters are only marked present as many times as the answer still has them.
@@ -72,48 +44,18 @@ function Engine.evaluate(guess, answer)
     return result
 end
 
--- Civil date to day count, so the result does not depend on the time zone or daylight saving.
-function Engine.day_number(date)
-    local year = date.month <= 2 and date.year - 1 or date.year
-    local era = math.floor(year / 400)
-    local year_of_era = year - era * 400
-    local shifted_month = date.month > 2 and date.month - 3 or date.month + 9
-    local day_of_year = math.floor((153 * shifted_month + 2) / 5) + date.day - 1
-    local day_of_era = year_of_era * 365 + math.floor(year_of_era / 4) - math.floor(year_of_era / 100) + day_of_year
-    return era * 146097 + day_of_era - 719468 - EPOCH_DAY
-end
+Engine.day_number = Calendar.day_number
+Engine.today = Calendar.today
+Engine.answer_for_day = Calendar.of_day
 
-function Engine.today()
-    return Engine.day_number(os.date("*t"))
-end
-
-function Engine.answer_for_day(answers, day)
-    return answers[day % #answers + 1]
-end
-
--- Free play shares the daily lists, so it skips the daily words of the coming days and the ones played recently.
+-- Free play shares the daily lists, so it skips the daily words of the coming days and the ones played
+-- recently. Words are compared without accents, and the recent ones are saved that way.
 function Engine.free_avoided(answers, lang, today, upcoming_days, recent)
-    local avoided = {}
-    for day = today, today + upcoming_days do
-        avoided[Engine.plain(Engine.answer_for_day(answers, day), lang)] = true
-    end
-    for _, word in ipairs(recent) do
-        avoided[word] = true
-    end
-    return avoided
+    return Calendar.avoided(answers, today, upcoming_days, recent, function(word) return Engine.plain(word, lang) end)
 end
 
 function Engine.pick_free(answers, lang, avoided, random)
-    local candidates = {}
-    for _, word in ipairs(answers) do
-        if not avoided[Engine.plain(word, lang)] then
-            candidates[#candidates + 1] = word
-        end
-    end
-    if #candidates == 0 then
-        candidates = answers
-    end
-    return candidates[random(#candidates)]
+    return Calendar.pick_free(answers, avoided, random, function(word) return Engine.plain(word, lang) end)
 end
 
 function Engine.new(opts)
@@ -131,7 +73,10 @@ function Engine.new(opts)
 end
 
 function Engine:restore(saved)
-    self.guesses = saved.guesses or {}
+    self.guesses = {}
+    for i, guess in ipairs(saved.guesses or {}) do
+        self.guesses[i] = guess
+    end
     self.results = {}
     for i, guess in ipairs(self.guesses) do
         self.results[i] = Engine.evaluate(guess, self.answer_key)
@@ -202,33 +147,20 @@ function Engine:keyboard_states()
 end
 
 function Engine.new_stats()
-    return { played = 0, won = 0, streak = 0, best_streak = 0, last_day = nil, distribution = {} }
-end
-
-function Engine.record_result(stats, day, won, attempts)
-    if stats.last_day == day then
-        return stats
-    end
-    stats.played = stats.played + 1
-    if won then
-        stats.won = stats.won + 1
-        stats.streak = stats.last_day == day - 1 and stats.streak + 1 or 1
-        stats.best_streak = math.max(stats.best_streak, stats.streak)
-        stats.distribution[attempts] = (stats.distribution[attempts] or 0) + 1
-    else
-        stats.streak = 0
-    end
-    stats.last_day = day
+    local stats = Calendar.new_stats()
+    stats.distribution = {}
     return stats
 end
 
--- The saved streak only changes when a game ends, so a missed day has to be checked when showing it.
-function Engine.current_streak(stats, today)
-    if stats.last_day and today - stats.last_day > 1 then
-        return 0
+-- A day is recorded once; the attempts only count when it was.
+function Engine.record_result(stats, day, won, attempts)
+    if Calendar.record(stats, day, won) and won then
+        stats.distribution[attempts] = (stats.distribution[attempts] or 0) + 1
     end
-    return stats.streak
+    return stats
 end
+
+Engine.current_streak = Calendar.current_streak
 
 function Engine:share_text(title)
     local marks = { [Engine.CORRECT] = "■", [Engine.PRESENT] = "▣", [Engine.ABSENT] = "□" }

@@ -42,9 +42,10 @@ O progresso fica em `koreader/settings/vocabulo_game.lua`. Para desinstalar, apa
 Com [LuaJIT](https://luajit.org) instalado, a partir da raiz do repositório:
 
 ```sh
-luajit tools/validate_words.lua
-luajit tests/engine_spec.lua
+sh tools/check.sh
 ```
+
+Isso confere as listas de palavras e os textos, roda os testes e gera o pacote em `dist/`.
 
 As regras, a geração das listas de palavras, as demais ferramentas e o processo de publicação estão em [docs/design.md](docs/design.md). Para sugerir a remoção de uma palavra, abra uma issue. Contribuições entram sob a mesma licença do projeto.
 
@@ -52,6 +53,6 @@ As regras, a geração das listas de palavras, as demais ferramentas e o process
 
 [GPL-3.0](LICENSE), somente a versão 3. Você pode usar, estudar, modificar e redistribuir, mantendo o código aberto sob a mesma licença.
 
-As listas de palavras derivam de fserb/pt-br, dwyl/english-words, an-array-of-spanish-words e FrequencyWords. Os créditos e as licenças de cada uma estão em [NOTICE](NOTICE).
+As listas de palavras derivam de fserb/pt-br, dwyl/english-words, an-array-of-spanish-words e FrequencyWords. As respostas em inglês e espanhol foram escolhidas pela frequência do FrequencyWords, sob CC BY-SA 4.0, licença compatível com a GPL-3.0. Os créditos e as licenças de cada uma estão em [NOTICE](NOTICE).
 
 A licença não dá direito de uso sobre os nomes "Vocábulo" e "Beater Studios". Para outros usos, fale com a [Beater Studios](https://beaterstudios.com/).
