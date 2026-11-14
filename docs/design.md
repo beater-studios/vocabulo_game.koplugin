@@ -1,122 +1,135 @@
-# Vocábulo: design e ferramentas
+# Vocábulo: design and tools
 
-Como o jogo funciona por dentro, para quem quer entender o código ou mexer nas listas. Para instalar e jogar, veja o [README](../README.md). `vocabulo_game` é o identificador do plugin.
+How the game works inside, for anyone who wants to understand the code or change the word lists. To install and play, see the [README](../README.md). `vocabulo_game` is the plugin identifier.
 
-## Regras
+## Rules
 
-- O jogador escolhe o idioma e o tamanho (5, 6 ou 7 letras) e tem 6 tentativas.
-- Cada tentativa precisa ser uma palavra da lista de tentativas válidas.
-- **Preto:** letra no lugar certo. **Cinza:** letra na palavra, em outro lugar. **Branco:** letra fora da palavra. Letras repetidas só são marcadas tantas vezes quantas existem na resposta.
-- Acentos e cedilha não são digitados e aparecem quando a palavra é revelada. Em espanhol, o `Ñ` é uma letra própria, com tecla própria.
-- **Palavra do dia:** vem da data local e da lista de respostas de cada combinação de idioma e tamanho. Quem usa a mesma configuração recebe a mesma palavra, sem internet. Ao fim da lista, a sequência recomeça.
-- **Modo livre:** palavras sorteadas das mesmas listas, sem limite por dia. Não conta para a sequência e tem contador próprio. O sorteio evita a palavra de hoje, as dos próximos 30 dias e as 30 últimas sorteadas. Uma palavra jogada no modo livre ainda pode voltar como palavra do dia mais adiante, quando a lista dá a volta. O resultado não é compartilhado.
-- O progresso é salvo a cada tentativa em `koreader/settings/vocabulo_game.lua`, junto com a resposta, para que uma partida em andamento não mude se as listas forem atualizadas. As estatísticas são separadas por combinação.
-- A sequência só é recalculada quando uma partida termina. Na tela de estatísticas, ela aparece zerada se o último jogo foi antes de ontem. Cada dia conta uma vez só: com o relógio do aparelho atrasado, um dia igual ou anterior ao último registrado não conta de novo.
-- O resultado pode ser compartilhado por QR code, com a grade em `■ ▣ □`, sem revelar letras.
-- Os textos da interface seguem o idioma escolhido. Na primeira abertura, o idioma vem da configuração do KOReader.
-- O jogo é sempre em retrato e não usa rede. Se o aparelho estiver deitado, a tela gira ao abrir e volta ao fechar, ou se a abertura falhar; nesse caso, o menu mostra um aviso no lugar do jogo. Precisa de tela sensível ao toque. Em aparelhos com botão Voltar, ele volta uma tela e, no menu, fecha o jogo. O `Close` que o KOReader manda a todas as janelas antes de sair fecha o jogo, menos antes de desligar ou reiniciar, para não mexer na tela de descanso.
-- **Tela de descanso:** se o aparelho dorme com o jogo aberto e a tela de descanso do KOReader está no modo de capa do livro, aparece a capa do Vocábulo no lugar. Com o jogo fechado, em outro modo, ao desligar ou ao reiniciar, nada muda.
+- The player picks the language and the length (5, 6 or 7 letters) and has 6 attempts.
+- Every attempt has to be a word from the list of valid guesses.
+- **Black:** letter in the right place. **Gray with a black corner:** letter in the word, in another place. **White:** letter not in the word. A repeated letter is only marked as many times as the answer has it. The corner is on the board, the keyboard, the small grids of the title card and the sharing screen, and the help, so a letter in another place does not depend only on telling gray from white on a panel with ghosting.
+- Accents and cedilla are not typed, and they appear when the word is revealed. In Spanish, `Ñ` is a letter of its own, with its own key.
+- **Word of the day:** comes from the local date and the answer list of each combination of language and length. Everyone with the same settings gets the same word, with no internet. At the end of the list, the sequence starts over.
+- **Free play:** words drawn from the same lists, with no daily limit. It does not count for the streak and has its own counter. The draw avoids today's word, the ones for the next 30 days and the last 30 drawn. A word played in free play can still come back as a word of the day later, when the list wraps around. The result is not shared.
+- Progress is saved after every attempt in `koreader/settings/vocabulo_game.lua`, together with the answer, so a game in progress does not change if the lists are updated. Statistics are separate for each combination.
+- The streak is only recalculated when a game ends. On the statistics screen, it shows as zero if the last game was before yesterday. Each day counts once: with the device clock set back, a day equal to or before the last one recorded does not count again.
+- The result of the word of the day can be shared on a screen of its own, with the grid of colors and a QR code that holds the text of the result (`■ ▣ □`), without revealing letters.
+- The interface texts follow the language picked. The first time, the language comes from the KOReader setting.
+- The game is always in portrait and uses no network. If the device is in landscape, the screen rotates on opening and goes back on closing, or if opening fails; in that case, the menu shows a message instead of the game. It needs a touch screen. On devices with a Back button, it goes back one screen and, on the title screen, closes the game. The `Close` that KOReader sends to every window before quitting closes the game, except before a shutdown or restart, so the sleep screen is left alone.
+- **Sleep screen:** if the device sleeps with the game open and the KOReader sleep screen is set to the book cover, the Vocábulo cover shows instead. With the game closed, in another mode, on shutdown or on restart, nothing changes.
 
-## Estrutura
+## Structure
 
 ```
 vocabulo_game.koplugin/
-  _meta.lua, main.lua     registro no KOReader
+  _meta.lua, main.lua     registration in KOReader
   vocabulo_game/
-    engine.lua            regras, sem depender do KOReader
-    words.lua             carrega as listas
-    keyboard.lua          letras do teclado do jogo, também usado pelo gerador de listas
-    state.lua             leitura do progresso salvo, sem depender do KOReader
-    ui/screen.lua         tela inicial, estatísticas, ajuda e sobre
-    ui/game_view.lua      grade e teclado, desenhados direto na tela
-    screensaver.lua       capa do jogo na tela de descanso
-    portrait.lua          tela em retrato enquanto o jogo está aberto
-    refresh.lua           quando a tela pisca no e-ink
-    letters.lua           letras com acento (separar, tirar acentos, maiúsculas)
-    calendar.lua          número do dia, palavra do dia, sorteio do modo livre e sequência
-    saved_state.lua       leitura de saves de versões anteriores
+    engine.lua            rules, without KOReader
+    words.lua             loads the lists
+    keyboard.lua          letters of the game keyboard, also used by the list generator
+    state.lua             reads the saved progress, without KOReader
+    ui/screen.lua         the window: state, navigation, taps, Back key and e-ink updates
+    ui/canvas.lua         a screen laid out in the units of the mockups and scaled to the device
+    ui/parts.lua          tiles, header, buttons, choices, number boxes and attempt bars
+    ui/game_view.lua      the board with the keyboard, and the result card
+    ui/pages.lua          title, statistics, sharing, help, about and the error message
+    screensaver.lua       game cover on the sleep screen
+    portrait.lua          portrait screen while the game is open
+    refresh.lua           when the e-ink screen flashes
+    letters.lua           accented letters (split, remove accents, upper case)
+    calendar.lua          day number, word of the day, free play draw and streak
+    saved_state.lua       reads saves from earlier versions
   data/
-    i18n.lua              textos nos três idiomas
-    words/<idioma>/       answers_<n>.txt e guesses_<n>.txt
-  assets/screensaver.png  capa em tela cheia, 1200x1600
-  tools/, tests/, docs/   desenvolvimento, fora do pacote publicado
+    i18n.lua              texts in the three languages
+    words/<lang>/         answers_<n>.txt and guesses_<n>.txt
+  assets/screensaver.png  full-screen cover, 1200x1600
+  assets/icon.png         game icon for the About screen
+  assets/icons/           SVG icons of the buttons, in black and, for dark buttons, in white
+  tools/, tests/, docs/   development, left out of the published package
 ```
 
-`screensaver.lua`, `portrait.lua`, `refresh.lua`, `letters.lua`, `calendar.lua` e `saved_state.lua` são cópias sem edição de módulos comuns a outros plugins, assim como `tools/package_lib.sh`, `tools/check_texts.lua`, os workflows em `.github/workflows/` e, em `tools/koreader/`, `run_headless.sh`, `run_emulator.sh`, `check_all_sizes.sh`, `fuzz.lua`, `check_screensaver.lua` e `check_rotation.lua`. O cabeçalho de cada um diz isso. Uma melhoria neles não é feita só aqui, porque a próxima cópia a desfaz. O motor mantém os nomes que já usava (`Engine.split`, `Engine.plain`, `Engine.today`, `Engine.record_result` e os outros) chamando esses módulos.
+`screensaver.lua`, `portrait.lua`, `refresh.lua`, `letters.lua`, `calendar.lua` and `saved_state.lua` are unedited copies of modules shared with other plugins, as are `tools/package_lib.sh`, `tools/check_texts.lua`, the workflows in `.github/workflows/` and, in `tools/koreader/`, `run_headless.sh`, `run_emulator.sh`, `check_all_sizes.sh`, `fuzz.lua`, `check_screensaver.lua` and `check_rotation.lua`. The header of each one says so. An improvement to them is not made only here, because the next copy undoes it. The engine keeps the names it already used (`Engine.split`, `Engine.plain`, `Engine.today`, `Engine.record_result` and the others), calling those modules.
 
-A capa da tela de descanso entra embrulhando `Screensaver.setup` do KOReader: ele escolhe a imagem como sempre, e o jogo só a troca pela própria capa quando a tela do Vocábulo é a janela de tela cheia no topo. Nenhuma configuração é gravada, então não há o que desfazer ao acordar. A troca só acontece com `screensaver_type` em `cover` e no descanso comum, não ao desligar ou reiniciar. A imagem tem 1200x1600, o dobro de 600x800, para ficar nítida em telas maiores; nas de 600x800, o KOReader a reduz pela metade. A arte sai de `KOREADER_DIR=<KOReader de desktop> python3 -I tools/make_screensaver.py`, que usa o Pillow e a Noto Serif do KOReader.
+The sleep screen cover wraps KOReader's `Screensaver.setup`: it picks the image as usual, and the game only swaps it for its own cover when the Vocábulo screen is the full-screen window on top. No setting is saved, so there is nothing to undo on waking. The swap only happens with `screensaver_type` set to `cover` and on a regular sleep, not on shutdown or restart. The image is 1200x1600, twice 600x800, to stay sharp on larger screens; on 600x800 screens, KOReader halves it. The art comes from `KOREADER_DIR=<desktop KOReader> python3 -I tools/make_screensaver.py`, which uses Pillow and KOReader's Noto Serif.
 
-A grade e o teclado são desenhados por uma única widget, porque 30 botões do KOReader pesariam no e-ink. Cada letra atualiza no e-ink só a própria linha, e o cabeçalho quando a mensagem muda. Os textos das células e das teclas são montados uma vez e reaproveitados, porque a tela inteira é pintada de novo na memória a cada toque.
+Every screen is drawn by the one window widget, on a canvas (`ui/canvas.lua`) laid out in the units of the mockups, 600x800, scaled to the screen and centered. Laying out a screen builds a list of things to paint and of tap areas, each tap area with an id that the checks use; painting only replays the list. KOReader buttons are not used: 30 of them would weigh on e-ink, and they cannot draw the tiles and cards of the design.
 
-As atualizações da tela usam só os modos `ui` (sem piscar) e `full` (piscando), contadas por `refresh.lua`. Cada tela tem um tipo (`title`, `game` ou a página aberta): abrir uma tela de outro tipo pisca, e uma mudança dentro do mesmo tipo (trocar idioma ou tamanho, enviar uma tentativa) não pisca, até 8 seguidas; a nona pisca, para limpar os rastros do e-ink. Abrir uma partida, terminar uma partida e acordar o aparelho também fazem a próxima atualização piscar. As letras digitadas atualizam só a linha delas, sem entrar na contagem. O modo `partial` não é usado, porque entra na contagem do próprio KOReader e a piscada cairia num momento qualquer.
+The game screen is laid out again on every key, which costs under a millisecond on the desktop. The letters, the keys and the icons are built once and kept in a cache that lives until the window closes, so a key does not build dozens of texts or render an SVG again. On the e-ink screen, each key updates only the row being typed, and the message only when it changes.
 
-## Progresso salvo
+Every text is measured when the screen is laid out. A text wider or taller than the room it was given is cut on the screen and noted by the canvas, and `tools/koreader/check_layout.lua` fails on any of them, in every language, at four screen sizes.
 
-Fica em `koreader/settings/vocabulo_game.lua`, gravado a cada tentativa. Chaves:
+Screen updates only use the `ui` (no flash) and `full` (flash) modes, counted by `refresh.lua`. Each screen has a kind (`title`, `game` or the open page): opening a screen of another kind flashes, and a change within the same kind (changing language or length, sending an attempt) does not flash, up to 8 in a row; the ninth flashes, to clear the e-ink ghosting. Opening a game, ending a game and waking the device also make the next update flash. Typed letters only update their own row, outside the count. The `partial` mode is not used, because it goes into KOReader's own count and the flash would come at a random moment.
 
-- `lang` e `length`: a última combinação escolhida.
-- `games`: a partida do dia de cada combinação (`pt_5`, `en_7`...), com `version`, `day`, `answer`, `guesses` e `finished`. A partida do dia terminada fica salva até o dia seguinte, para a tela inicial mostrar "Ver resultado" e a mesma palavra não ser jogada de novo.
-- `stats`: por combinação, `played`, `won`, `streak`, `best_streak`, `last_day` e `distribution` (vitórias por número de tentativas).
-- `free_games`, `free_stats` e `free_recent`: a partida do modo livre, o contador dele e as 30 últimas palavras sorteadas, sem acentos, por combinação.
+Laying out and painting both run inside `pcall`. If either fails (a save that passed the checks but does not work, for example), the error goes to the KOReader log, the screen shows only the Back button and a message in the three languages, and taps outside Back are ignored, so no tap lands on a key that is not shown. Without this, a painting error would repeat on every paint and the screen would be stuck. `check_layout.lua` plants both failures and checks this.
 
-`state.lua` lê tudo de volta campo por campo: um idioma ou tamanho que não existe volta ao padrão, um campo que falta nas estatísticas recebe o valor padrão, e uma partida com resposta, dia ou tentativas que não servem para a combinação dela é descartada, sem levar junto as estatísticas nem as outras partidas. Cada partida é lida protegida, então um save estragado nunca impede o jogo de abrir. As partidas salvas antes da 1.2.2 não têm `version` e são lidas como versão 1, que tem o mesmo formato. `version` só sobe quando um campo muda de sentido, e aí a leitura converte ou descarta só a partida. As tentativas salvas são uma cópia, nunca a mesma tabela que o motor continua mudando.
+## Saved progress
 
-`tests/saves/<versão>.lua` guarda saves reais de versões publicadas, gerados no emulador com aquela versão, e `tests/state_spec.lua` abre cada um. Antes de publicar uma versão que muda as listas ou o formato do save, gerar um save com a versão publicada e acrescentá-lo à pasta.
+Kept in `koreader/settings/vocabulo_game.lua`, written after every attempt. Keys:
 
-As tentativas válidas ficam como uma única string em memória, com até 49 mil palavras, em vez de uma tabela Lua. Só a lista da combinação em jogo é carregada.
+- `lang` and `length`: the last combination picked.
+- `games`: the daily game of each combination (`pt_5`, `en_7`...), with `version`, `day`, `answer`, `guesses` and `finished`. A finished daily game stays saved until the next day, so the title screen shows "See Result" and the same word is not played again.
+- `stats`: per combination, `played`, `won`, `streak`, `best_streak`, `last_day`, `distribution` (wins by number of attempts) and `last_attempts` (the attempts of the last daily game when it was won, highlighted in the statistics; empty after a loss).
+- `history`: per combination, the result of each daily game of the last 70 days (`"w"` won, `"l"` lost), for the calendar of the last 4 weeks in the statistics. It starts empty in the version that added it.
+- `free_games`, `free_stats` and `free_recent`: the free play game, its counters (`played`, `won` and `distribution`, for the average of attempts) and the last 30 words drawn, without accents, per combination.
 
-## Listas de palavras
+`history`, `last_attempts` and the free play `distribution` were added in 1.3.0 as new fields, with the same meaning in every save, so the game `version` did not change. `state.lua` reads everything back field by field: a language or length that does not exist goes back to the default, a field missing from the statistics gets the default value, and a game whose answer, day or attempts do not fit its combination is dropped, without taking the statistics or the other games with it. Each game is read protected, so a broken save never stops the game from opening. Games saved before 1.2.2 have no `version` and are read as version 1, which has the same format. `version` only goes up when a field changes meaning, and then reading converts or drops only the game. The saved attempts are a copy, never the same table the engine keeps changing.
 
-Geradas por `tools/words/build_words.py`, a partir das fontes baixadas por `tools/words/fetch_sources.sh`. As fontes ficam fora do repositório. O script baixa cada fonte de um commit fixo, escrito nele, numa pasta nova e vazia (recusa uma pasta com arquivos), e confere o SHA-256 de cada arquivo com `tools/words/sources.sha256`. Os commits são os que geraram as listas publicadas na 1.2.0, e gerar de novo com eles dá exatamente as listas do repositório. Atualizar uma fonte é uma mudança de propósito, sozinha: trocar o commit no script, o checksum em `sources.sha256` e revisar a diferença nas listas.
+`tests/saves/<version>.lua` keeps real saves from published versions, made in the emulator with that version, and `tests/state_spec.lua` opens each one. Before publishing a version that changes the lists or the save format, make a save with the published version and add it to the folder.
 
-| Uso | Português | Inglês | Espanhol |
+The valid guesses are kept as a single string in memory, with up to 49 thousand words, instead of a Lua table. Only the list of the combination in play is loaded.
+
+## Word lists
+
+Built by `tools/words/build_words.py`, from the sources downloaded by `tools/words/fetch_sources.sh`. The sources stay out of the repository. The script downloads each source at a fixed commit, written in it, into a new and empty folder (it refuses a folder with files), and checks the SHA-256 of each file against `tools/words/sources.sha256`. The commits are the ones that built the lists published in 1.2.0, and building again with them gives exactly the lists in the repository. Updating a source is a deliberate change, made on its own: change the commit in the script and the checksum in `sources.sha256`, and review the difference in the lists.
+
+| Use | Portuguese | English | Spanish |
 |---|---|---|---|
-| Tentativas válidas | [fserb/pt-br](https://github.com/fserb/pt-br) (MIT) | [dwyl/english-words](https://github.com/dwyl/english-words) (Unlicense) | [an-array-of-spanish-words](https://github.com/words/an-array-of-spanish-words) (MIT) |
-| Frequência das respostas | ICF de fserb/pt-br | [FrequencyWords](https://github.com/hermitdave/FrequencyWords) (conteúdo CC BY-SA 4.0) | FrequencyWords |
+| Valid guesses | [fserb/pt-br](https://github.com/fserb/pt-br) (MIT) | [dwyl/english-words](https://github.com/dwyl/english-words) (Unlicense) | [an-array-of-spanish-words](https://github.com/words/an-array-of-spanish-words) (MIT) |
+| Answer frequency | ICF from fserb/pt-br | [FrequencyWords](https://github.com/hermitdave/FrequencyWords) (content CC BY-SA 4.0) | FrequencyWords |
 
-Dois filtros são usados só na geração, sem ir para o jogo: as formas-base dos dicionários Hunspell de [wooorm/dictionaries](https://github.com/wooorm/dictionaries), que tiram flexões e nomes próprios, e o [LDNOOBW](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words) (CC BY 4.0). Em português, as formas-base do Hunspell não servem: ele guarda palavras comuns como derivadas de outras (escola de "escolar", música de "músico", livro de "livrar"), e elas nunca virariam resposta. Por isso a base em português é o léxico do fserb/pt-br, menos os plurais e parte dos nomes próprios:
+Two filters are only used while building, and do not go into the game: the base forms of the Hunspell dictionaries from [wooorm/dictionaries](https://github.com/wooorm/dictionaries), which remove inflections and proper names, and [LDNOOBW](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words) (CC BY 4.0). In Portuguese, the Hunspell base forms do not work: it keeps common words as derived from others (escola from "escolar", música from "músico", livro from "livrar"), and they would never become answers. So the Portuguese base is the fserb/pt-br lexicon, minus plurals and part of the proper names:
 
-- **Plurais:** a palavra sai quando o singular, por -s, -es, -ões, -ães, -ãos, -ns, -is (-l ou -il) ou -eis, também está no léxico. Nos sufixos terminados em -is ou -es (-is, -eis, -es, -ões, -ães), o singular é comparado sem acento, para pegar papéis (papel), meses (mês) e ingleses (inglês). Em -s e -ãos a comparação é exata, senão pires sairia como plural de piré. Os substantivos que só se usam no plural, como óculos, férias e parabéns, também saem.
-- **Nomes próprios:** sai a palavra que o Hunspell só conhece com maiúscula, como Cícero e Beatriz. A comparação é com acento, para que um lugar como Choró não tire choro. O filtro é parcial: o Hunspell não tem muitos nomes (Silva, Bruno, Mariana) e só tem com maiúscula algumas palavras comuns (leste, malta, marinho), que então deixam de ser candidatas.
+- **Plurals:** the word goes out when its singular, by -s, -es, -ões, -ães, -ãos, -ns, -is (-l or -il) or -eis, is also in the lexicon. For the suffixes ending in -is or -es (-is, -eis, -es, -ões, -ães), the singular is compared without accents, to catch papéis (papel), meses (mês) and ingleses (inglês). For -s and -ãos the comparison is exact, otherwise pires would go out as the plural of piré. Nouns only used in the plural, such as óculos, férias and parabéns, also go out.
+- **Proper names:** a word that Hunspell only knows capitalized goes out, such as Cícero and Beatriz. The comparison keeps accents, so a place like Choró does not remove choro. The filter is partial: Hunspell lacks many names (Silva, Bruno, Mariana) and only has a few common words capitalized (leste, malta, marinho), which then stop being candidates.
 
-O léxico também tem formas de verbo conjugadas (passa, deixa, penso, sofreu), e os filtros não pegam nomes próprios, gentílicos nem estrangeirismos que o Hunspell não conheça. Tudo isso sai na revisão das candidatas. As formas de verbo que também são substantivo, como conta e ajuda, ficam; as que são só verbo saem. Os infinitivos podem ser resposta.
+The lexicon also has conjugated verb forms (passa, deixa, penso, sofreu), and the filters do not catch proper names, demonyms or foreign words that Hunspell does not know. All of that goes out when the candidates are reviewed. Verb forms that are also nouns, such as conta and ajuda, stay; the ones that are only verbs go out. Infinitives can be answers.
 
-As respostas só saem de `tools/words/approved_<idioma>.txt`, a lista das palavras já revisadas e aprovadas, na ordem de frequência das candidatas, embaralhadas com semente fixa. As rejeitadas ficam em `tools/words/exclude_<idioma>.txt`, para não voltarem à revisão. São até 750 respostas por idioma e tamanho. Toda resposta publicada está na lista de aprovadas, e o gerador para com erro se não estiver. Uma palavra nova das fontes só vira resposta depois de alguém aprová-la: `build_words.py <fontes> pending <pasta>` lista, entre as 1200 primeiras candidatas de cada combinação, as que não estão nem nas aprovadas nem nas excluídas, e cada uma vai para uma das duas listas. A primeira lista de aprovadas foi montada com tudo o que já tinha sido publicado mais as 1200 primeiras candidatas de cada combinação que não estavam excluídas, o que antes o gerador tratava como revisado.
+Answers only come from `tools/words/approved_<lang>.txt`, the list of words already reviewed and approved, in the frequency order of the candidates, shuffled with a fixed seed. Rejected words stay in `tools/words/exclude_<lang>.txt`, so they do not come back for review. There are up to 750 answers per language and length. Every published answer is in the approved list, and the generator stops with an error if one is not. A new word from the sources only becomes an answer after someone approves it: `build_words.py <sources> pending <folder>` lists, among the first 1200 candidates of each combination, those that are neither approved nor excluded, and each one goes to one of the two lists. The first approved list was made with everything already published plus the first 1200 candidates of each combination that were not excluded, which the generator used to treat as reviewed.
 
-O gerador não repete as regras do teclado: `tools/words/reachable.lua` carrega o `keyboard.lua` do jogo e responde, palavra por palavra, se ela pode ser digitada naquele idioma. Uma resposta publicada que deixe de poder ser digitada sai como uma excluída.
+The generator does not repeat the keyboard rules: `tools/words/reachable.lua` loads the game's `keyboard.lua` and answers, word by word, whether it can be typed in that language. A published answer that can no longer be typed goes out like an excluded one.
 
-A ordem publicada em `answers_<n>.txt` é a sequência das palavras do dia, então o gerador a preserva: as palavras já publicadas ficam no mesmo lugar, uma palavra que passe a ser excluída ou bloqueada é trocada por uma nova na mesma posição, e palavras novas só entram no fim, até o limite do idioma. Uma palavra que já está nas respostas só sai pelo `exclude_<idioma>.txt` ou pela lista de bloqueio: mudanças nos filtros ou no corte das candidatas não a alcançam, para não mexer na sequência. Por isso algumas respostas podem estar fora das candidatas atuais (em português, leste, malta, marinho, pomar e névoa). Rodar o gerador de novo com as mesmas fontes não muda nada. Só quando falta substituta a lista encurta e a sequência muda a partir daquele ponto, e o gerador avisa. Como a palavra do dia é `respostas[dia % tamanho + 1]`, mudar o tamanho de uma lista só preserva os dias seguintes enquanto ela for maior que o número do dia de hoje. Por isso o gerador para com erro, sem gravar, quando o tamanho de uma lista mudaria e ela não tem pelo menos um ano de folga sobre o dia de hoje; `ALLOW_LENGTH_CHANGE=1` aceita a mudança de propósito. Para gerar uma lista do zero, apague o `answers_<n>.txt` correspondente antes.
+The published order in `answers_<n>.txt` is the sequence of daily words, so the generator keeps it: published words stay in the same place, a word that becomes excluded or blocked is replaced by a new one in the same position, and new words only go at the end, up to the limit for the language. A word already among the answers only goes out through `exclude_<lang>.txt` or the blocklist: changes to the filters or to the candidate cut do not reach it, so the sequence does not move. That is why some answers may be outside the current candidates (in Portuguese, leste, malta, marinho, pomar and névoa). Running the generator again with the same sources changes nothing. Only when there is no replacement does the list get shorter and the sequence change from that point, and the generator says so. Since the word of the day is `answers[day % length + 1]`, changing the length of a list only keeps the following days while the list is longer than today's day number. So the generator stops with an error, without writing, when the length of a list would change and it does not have at least a year to spare over today's day number; `ALLOW_LENGTH_CHANGE=1` accepts the change on purpose. To build a list from scratch, delete the matching `answers_<n>.txt` first.
 
-Critério das exclusões: palavras gramaticais, flexões, nomes próprios, gentílicos, meses, estrangeirismos, termos obscuros e tudo que seja ofensivo ou pesado para ver logo cedo (violência, morte, doença grave, drogas, religião e política partidária).
+What is excluded: function words, inflections, proper names, demonyms, months, foreign words, obscure terms and anything offensive or heavy to see first thing in the morning (violence, death, serious illness, drugs, religion and party politics).
 
 ```sh
-sh tools/words/fetch_sources.sh /pasta/nova
-python3 -I tools/words/build_words.py /pasta/nova pending /pasta/de/revisao
-python3 -I tools/words/build_words.py /pasta/nova build
+sh tools/words/fetch_sources.sh /new/folder
+python3 -I tools/words/build_words.py /new/folder pending /review/folder
+python3 -I tools/words/build_words.py /new/folder build
 ```
 
-A release gera as listas de novo a partir das fontes e falha se o resultado for diferente do repositório (`sh tools/check.sh release`), então o que foi revisado é o que vai para o pacote.
+The release builds the lists again from the sources and fails if the result differs from the repository (`sh tools/check.sh release`), so what was reviewed is what goes into the package.
 
-## Ferramentas
+## Tools
 
-- `sh tools/check.sh`: tudo o que roda sem o KOReader, o mesmo comando no Mac e na CI: `tools/validate_words.lua` (as listas e o teclado), os testes em `tests/*_spec.lua` (o motor e o progresso salvo), `tools/check_texts.lua t strings 'strings()'` (as mesmas chaves e marcadores nos três idiomas, sem travessão, sem marca de aparelho e toda chave pedida pelo código existindo) e o pacote. Com `release`, também baixa as fontes, gera as listas e confere que são iguais às do repositório.
-- `sh tools/package.sh`: gera o zip e o checksum em `dist/`, com os passos de `tools/package_lib.sh`, que exige `LICENSE`, `NOTICE` e a capa e confere que tudo o que o código carrega está no pacote. O mesmo conteúdo gera o mesmo zip, byte a byte.
-- Com `KOREADER_DIR` apontando para um KOReader de desktop, de dentro da pasta do plugin:
-  - `tools/koreader/run_emulator.sh` abre o jogo numa janela de 600x800, com o teclado virtual ligado como no Kindle.
-  - `tools/koreader/check_all_sizes.sh` roda `tools/koreader/check_layout.lua` em quatro tamanhos de tela e lista todos os que falharam. Ele joga todas as combinações pelos toques e confere que cada tela cabe, os textos mais longos, a versão na tela Sobre, a partida retomada numa tela nova, a sequência de modos de pintura e o botão Voltar.
-  - `tools/koreader/run_headless.sh tools/koreader/fuzz_ui.lua` faz toques, seguradas e arrastos aleatórios na tela inicial, na palavra do dia de cada combinação e no modo livre de cada idioma, digitando palavras das listas de vez em quando, com o dia fixo. Cada erro sai com o comando para repetir (`SEED`, `ACTIONS` e `ONLY`).
-  - `tools/koreader/run_headless.sh tools/koreader/check_screensaver.lua` confere quando a capa do jogo entra na tela de descanso, e `tools/koreader/check_rotation.lua` abre o jogo com o KOReader deitado e confere o retrato, inclusive numa abertura que falha.
-  - Com `OUTPUT_DIR`, os scripts salvam as telas em PNG nessa pasta; `tools/koreader/render_screens.lua` gera as capturas do README.
+- `sh tools/check.sh`: everything that runs without KOReader, the same command on the Mac and in the CI: `tools/validate_words.lua` (the lists and the keyboard), the tests in `tests/*_spec.lua` (the engine and the saved progress), `tools/check_texts.lua t 'strings()'` (the same keys and markers in the three languages, no dashes, no device brand and every key the code asks for present) and the package. With `release`, it also downloads the sources, builds the lists and checks that they match the repository.
+- `sh tools/package.sh`: builds the zip and its checksum in `dist/`, with the steps of `tools/package_lib.sh`, which requires `LICENSE`, `NOTICE` and the cover and checks that everything the code loads is in the package. The same content builds the same zip, byte for byte.
+- With `KOREADER_DIR` pointing to a desktop KOReader, from the plugin folder:
+  - `tools/koreader/run_emulator.sh` opens the game in a 600x800 window, with the on-screen keyboard on, as on the Kindle.
+  - `tools/koreader/check_all_sizes.sh` runs `tools/koreader/check_layout.lua` at four screen sizes and lists every one that failed. In each interface language, it plays every combination through the tap areas, as a finger would, and checks that no screen has a text out of its room, anything below the screen or a tap area outside it; the texts that only show in some games (six attempts, day 9999); the statistics and history recorded; the version on the About screen; a game resumed in a new screen; the sequence of refresh modes; planted layout and painting failures; and the Back key.
+  - `tools/koreader/run_headless.sh tools/koreader/fuzz_ui.lua` makes random taps, holds and swipes on the title screen, on the word of the day of each combination and on free play in each language, typing words from the lists now and then, with the day fixed. Each error comes with the command to repeat it (`SEED`, `ACTIONS` and `ONLY`).
+  - `tools/koreader/run_headless.sh tools/koreader/check_screensaver.lua` checks when the game cover goes on the sleep screen, and `tools/koreader/check_rotation.lua` opens the game with KOReader in landscape and checks portrait, also when opening fails.
+  - With `OUTPUT_DIR`, the scripts save the screens as PNG in that folder. `OUTPUT_DIR=docs/screenshots tools/koreader/run_headless.sh tools/koreader/render_screens.lua` makes the README screenshots (title, game, result and statistics), in English in `docs/screenshots/` and in Portuguese in `docs/screenshots/pt/`, with the date fixed on 2026-11-14 and made-up statistics.
+- `KOREADER_DIR=<desktop KOReader> python3 -I tools/make_brand_art.py`, after the screenshots: the icon (`docs/brand/icon.png`, and `assets/icon.png` for the About screen), the README banner and the GitHub preview, in English (`docs/brand/banner.png` and `docs/social-preview.png`) and in Portuguese (the same names ending in `_pt`). The GitHub preview is uploaded by hand in the repository's Settings > Social preview.
 
-O emulador não mostra o que é próprio do e-ink nem a velocidade do aparelho: a conferência final é num aparelho real.
+The emulator does not show what is specific to e-ink or the speed of the device: the final check is on a real device.
 
-## Licença
+## License
 
-Tudo está sob GPL-3.0, somente a versão 3. Uma licença "não comercial" não é possível aqui, porque as respostas usam dados CC BY-SA 4.0. Os créditos das fontes estão em `NOTICE`.
+Everything is under GPL-3.0, version 3 only. A "non-commercial" license is not possible here, because the answers use CC BY-SA 4.0 data. Credits for the sources are in `NOTICE`.
 
-## Como publicar uma versão
+## Publishing a version
 
-1. Atualizar `version` em `_meta.lua` e criar a seção da versão em `CHANGELOG.md`, no formato `## [1.2.3]`.
-2. Se a versão muda as listas ou o formato do save, acrescentar a `tests/saves/` um save gerado com a versão publicada.
-3. Rodar `sh tools/check.sh`, `tools/koreader/check_all_sizes.sh`, o `fuzz_ui.lua`, o `check_screensaver.lua` e o `check_rotation.lua`, e testar num aparelho.
-4. Publicar a release `v1.2.3` no GitHub, criando a tag junto, depois do push. O workflow `release.yml` confere se a tag bate com o `_meta.lua`, roda `sh tools/check.sh release` (que gera as listas de novo a partir das fontes), gera o pacote e anexa o zip e o checksum à release. A CI (`ci.yml`) roda `sh tools/check.sh` em cada push e pull request.
+1. Update `version` in `_meta.lua` and add the version section in `CHANGELOG.md`, in the form `## [1.2.3]`.
+2. If the version changes the lists or the save format, add to `tests/saves/` a save made with the published version.
+3. Run `sh tools/check.sh`, `tools/koreader/check_all_sizes.sh`, `fuzz_ui.lua`, `check_screensaver.lua` and `check_rotation.lua`, and test on a device.
+4. Publish the release `v1.2.3` on GitHub, creating the tag with it, after the push. The `release.yml` workflow checks that the tag matches `_meta.lua`, runs `sh tools/check.sh release` (which builds the lists again from the sources), builds the package and attaches the zip and its checksum to the release. The CI (`ci.yml`) runs `sh tools/check.sh` on every push and pull request.

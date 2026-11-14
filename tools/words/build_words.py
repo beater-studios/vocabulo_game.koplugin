@@ -45,7 +45,7 @@ def reachable(words, lang):
                             capture_output=True, text=True, encoding="utf-8", check=True)
     answers = result.stdout.split("\n")[:len(words)]
     if len(answers) != len(words):
-        sys.exit("reachable.lua respondeu %d de %d palavras" % (len(answers), len(words)))
+        sys.exit("reachable.lua answered %d of %d words" % (len(answers), len(words)))
     return {word for word, answer in zip(words, answers) if answer == "1"}
 
 
@@ -157,7 +157,7 @@ def candidates(sources, out_dir, only_pending):
             if only_pending:
                 words = [w for w in words if w not in reviewed]
             write_lines(os.path.join(out_dir, "%s_%d.txt" % (lang, length)), words)
-            print("%s %d: %d %s" % (lang, length, len(words), "a revisar" if only_pending else "candidatas"))
+            print("%s %d: %d %s" % (lang, length, len(words), "to review" if only_pending else "candidates"))
 
 
 def stable_answers(published, candidates, approved, excluded, blocked, typable, lang, seed):
@@ -199,7 +199,7 @@ def build(sources):
             published = read_lines(answers_path) if os.path.exists(answers_path) else []
             unapproved = [w for w in published if w not in approved]
             if unapproved:
-                print("  %s %d: respostas publicadas fora de approved_%s.txt: %s" % (lang, length, lang, ", ".join(unapproved[:10])))
+                print("  %s %d: published answers missing from approved_%s.txt: %s" % (lang, length, lang, ", ".join(unapproved[:10])))
                 failed = True
                 continue
             candidates = ranked_answers(lang, length, ranked, base_keys, blocked, typable, excluded)
@@ -207,11 +207,11 @@ def build(sources):
                                             reachable(published, lang), lang,
                                             "%s-%d" % (lang, length))
             if shifted:
-                print("  %s %d: palavras removidas sem substituta, a palavra do dia muda a partir delas" % (lang, length))
+                print("  %s %d: words removed with no replacement, the word of the day changes from them on" % (lang, length))
             if published and len(words) != len(published) and len(published) <= today + LENGTH_CHANGE_MARGIN_DAYS \
                     and os.environ.get("ALLOW_LENGTH_CHANGE") != "1":
-                print("  %s %d: a lista passaria de %d para %d palavras, e o dia de hoje é %d: a palavra do dia mudaria"
-                      " para todos. Para aceitar, rode de novo com ALLOW_LENGTH_CHANGE=1."
+                print("  %s %d: the list would go from %d to %d words, and today is day %d: the word of the day would change"
+                      " for everyone. To accept it, run again with ALLOW_LENGTH_CHANGE=1."
                       % (lang, length, len(published), len(words), today))
                 failed = True
                 continue
@@ -219,9 +219,9 @@ def build(sources):
             guesses |= {plain(w, lang) for w in words}
             write_lines(answers_path, words)
             write_lines(os.path.join(lang_dir, "guesses_%d.txt" % length), sorted(guesses))
-            print("%s %d: %d respostas, %d tentativas válidas" % (lang, length, len(words), len(guesses)))
+            print("%s %d: %d answers, %d valid guesses" % (lang, length, len(words), len(guesses)))
             if len(words) < MINIMUM_ANSWERS:
-                print("  poucas respostas: mínimo de %d" % MINIMUM_ANSWERS)
+                print("  too few answers: the minimum is %d" % MINIMUM_ANSWERS)
                 failed = True
     sys.exit(1 if failed else 0)
 

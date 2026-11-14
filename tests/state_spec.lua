@@ -10,12 +10,12 @@ local function test(name, fn)
         passed = passed + 1
     else
         failed = failed + 1
-        print("FALHOU: " .. name .. "\n  " .. tostring(err))
+        print("FAILED: " .. name .. "\n  " .. tostring(err))
     end
 end
 local function eq(actual, expected)
     if actual ~= expected then
-        error(string.format("esperado %s, veio %s", tostring(expected), tostring(actual)), 2)
+        error(string.format("expected %s, got %s", tostring(expected), tostring(actual)), 2)
     end
 end
 local function load(saved)
@@ -42,7 +42,7 @@ local function type_word(engine, word)
     return engine:submit()
 end
 
-test("partida volta igual depois de salvar", function()
+test("a game comes back the same after saving", function()
     local engine = Engine.new{ lang = "pt", length = 5, day = 312, answer = "buquê", is_valid = function() return true end }
     type_word(engine, "gesto")
     type_word(engine, "bolsa")
@@ -57,7 +57,7 @@ test("partida volta igual depois de salvar", function()
     eq(again:is_won(), true)
 end)
 
-test("salvar não divide a lista de tentativas com o motor", function()
+test("saving does not share the attempt list with the engine", function()
     local engine = Engine.new{ lang = "pt", length = 5, day = 1, answer = "carro", is_valid = function() return true end }
     type_word(engine, "gesto")
     local record = State.record(engine, false, true)
@@ -68,13 +68,13 @@ test("salvar não divide a lista de tentativas com o motor", function()
     eq(#record.guesses, 1)
 end)
 
-test("resposta que saiu das listas continua na partida salva", function()
+test("an answer that left the lists stays in the saved game", function()
     local state = load({ games = { pt_5 = { day = 5, answer = "zebra", guesses = { "carro" } } } })
     eq(state.games.pt_5.answer, "zebra")
     eq(state.games.pt_5.version, State.GAME_VERSION)
 end)
 
-test("partida estragada é descartada e o resto fica", function()
+test("a broken game is dropped and the rest stays", function()
     local state, warnings = load({
         lang = "es",
         games = {
@@ -100,15 +100,15 @@ test("partida estragada é descartada e o resto fica", function()
     eq(#warnings, 0)
 end)
 
-test("erro ao ler uma partida não impede a abertura", function()
-    local broken = setmetatable({}, { __index = function() error("save quebrado") end })
+test("an error reading a game does not stop the opening", function()
+    local broken = setmetatable({}, { __index = function() error("broken save") end })
     local state, warnings = load({ games = { pt_5 = broken, en_5 = { day = 1, answer = "house", guesses = {} } } })
     eq(state.games.pt_5, nil)
     eq(state.games.en_5.answer, "house")
     eq(#warnings, 1)
 end)
 
-test("estatísticas sem um campo recebem o valor padrão", function()
+test("statistics missing a field get the default value", function()
     local state = load({ stats = { en_5 = { played = 2, won = 1 }, es_7 = { played = "x", distribution = 3, last_day = "ontem" } } })
     eq(state.stats.en_5.played, 2)
     eq(state.stats.en_5.best_streak, 0)
@@ -121,7 +121,7 @@ test("estatísticas sem um campo recebem o valor padrão", function()
     eq(state.stats.en_5.distribution[4], 1)
 end)
 
-test("opções salvas que não existem voltam ao padrão", function()
+test("saved choices that no longer exist go back to the default", function()
     local state = load({ lang = "fr", length = 9 })
     eq(state.lang, nil)
     eq(state.length, 5)
@@ -133,14 +133,40 @@ test("opções salvas que não existem voltam ao padrão", function()
     eq(next(state.free_recent), nil)
 end)
 
-test("palavras recentes do modo livre sem buracos nem repetidas", function()
+test("recent free play words without holes or repeats", function()
     local state = load({ free_recent = { pt_5 = { [1] = "carro", [2] = 5, [4] = "bolsa", [5] = "carro" }, en_5 = "x" } })
     eq(#state.free_recent.pt_5, 2)
     eq(state.free_recent.pt_5[2], "bolsa")
     eq(#state.free_recent.en_5, 0)
 end)
 
-test("saves de versões anteriores abrem", function()
+test("the daily history keeps only days and results", function()
+    local state = load({ history = { pt_5 = { [10] = "w", [11] = "l", [12] = "x", [12.5] = "w", day = "w" }, xx_5 = { [1] = "w" }, en_5 = 3 } })
+    eq(state.history.pt_5[10], "w")
+    eq(state.history.pt_5[11], "l")
+    eq(state.history.pt_5[12], nil)
+    eq(state.history.pt_5[12.5], nil)
+    eq(state.history.pt_5.day, nil)
+    eq(state.history.xx_5, nil)
+    eq(next(state.history.en_5), nil)
+end)
+
+test("the attempts of the last game are a number from 1 to 6", function()
+    local state = load({ stats = { pt_5 = { played = 1, won = 1, last_attempts = 4 }, pt_6 = { last_attempts = 9 }, pt_7 = { last_attempts = "4" } } })
+    eq(state.stats.pt_5.last_attempts, 4)
+    eq(state.stats.pt_6.last_attempts, nil)
+    eq(state.stats.pt_7.last_attempts, nil)
+end)
+
+test("free play statistics get the attempts by game", function()
+    local state = load({ free_stats = { pt_5 = { played = 3, won = 2 }, en_5 = { played = 2, won = 2, distribution = { [3] = 2, [7] = 1, [2] = -1 } } } })
+    eq(next(state.free_stats.pt_5.distribution), nil)
+    eq(state.free_stats.en_5.distribution[3], 2)
+    eq(state.free_stats.en_5.distribution[7], nil)
+    eq(state.free_stats.en_5.distribution[2], nil)
+end)
+
+test("saves from earlier versions open", function()
     local names = list_dir("tests/saves")
     eq(#names > 0, true)
     for _, name in ipairs(names) do
@@ -174,5 +200,5 @@ test("saves de versões anteriores abrem", function()
     end
 end)
 
-print(string.format("%d passaram, %d falharam", passed, failed))
+print(string.format("%d passed, %d failed", passed, failed))
 os.exit(failed == 0 and 0 or 1)

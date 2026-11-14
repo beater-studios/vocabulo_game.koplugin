@@ -12,7 +12,7 @@ local State = {}
 State.GAME_VERSION = 1
 
 local STATS = { played = 0, won = 0, streak = 0, best_streak = 0, distribution = {} }
-local FREE_STATS = { played = 0, won = 0 }
+local FREE_STATS = { played = 0, won = 0, distribution = {} }
 
 -- "pt_5" to "pt", 5, or nil for a combination the game does not have.
 function State.combination(key)
@@ -64,20 +64,50 @@ function State.game(saved, lang, length, daily)
     }
 end
 
-local function stats_of(saved)
-    local stats = SavedState.with_defaults(saved, STATS)
-    if type(stats.last_day) ~= "number" then
-        stats.last_day = nil
-    end
+-- Wins by number of attempts, without anything but positive counts from 1 to ATTEMPTS.
+local function distribution_of(saved)
     local distribution = {}
     for attempt = 1, Engine.ATTEMPTS do
-        local count = stats.distribution[attempt]
+        local count = type(saved) == "table" and saved[attempt]
         if type(count) == "number" and count > 0 then
             distribution[attempt] = count
         end
     end
-    stats.distribution = distribution
+    return distribution
+end
+
+local function whole_number(value)
+    return type(value) == "number" and value % 1 == 0 and value or nil
+end
+
+local function stats_of(saved)
+    local stats = SavedState.with_defaults(saved, STATS)
+    stats.last_day = whole_number(stats.last_day)
+    -- The attempts of the last daily game when it was won (nil after a loss), highlighted in the statistics (saved since 1.3.0).
+    local last = whole_number(stats.last_attempts)
+    stats.last_attempts = last and last >= 1 and last <= Engine.ATTEMPTS and last or nil
+    stats.distribution = distribution_of(stats.distribution)
     return stats
+end
+
+local function free_stats_of(saved)
+    local stats = SavedState.with_defaults(saved, FREE_STATS)
+    stats.distribution = distribution_of(stats.distribution)
+    return stats
+end
+
+-- The result of each recent daily game, by day: "w" won, "l" lost (saved since 1.3.0).
+local function history_of(saved)
+    local history = {}
+    if type(saved) ~= "table" then
+        return history
+    end
+    for day, mark in pairs(saved) do
+        if whole_number(day) and (mark == "w" or mark == "l") then
+            history[day] = mark
+        end
+    end
+    return history
 end
 
 local function recent_of(saved)
@@ -108,8 +138,9 @@ function State.load(read, warn)
         games = by_combination(read("games"), function(data, lang, length) return State.game(data, lang, length, true) end, warn),
         stats = by_combination(read("stats"), stats_of, warn),
         free_games = by_combination(read("free_games"), function(data, lang, length) return State.game(data, lang, length, false) end, warn),
-        free_stats = by_combination(read("free_stats"), function(data) return SavedState.with_defaults(data, FREE_STATS) end, warn),
+        free_stats = by_combination(read("free_stats"), free_stats_of, warn),
         free_recent = by_combination(read("free_recent"), recent_of, warn),
+        history = by_combination(read("history"), history_of, warn),
     }
 end
 

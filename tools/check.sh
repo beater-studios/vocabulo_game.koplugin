@@ -7,7 +7,7 @@ luajit tools/validate_words.lua
 for spec in tests/*_spec.lua; do
     luajit "$spec"
 done
-luajit tools/check_texts.lua t strings 'strings()'
+luajit tools/check_texts.lua t 'strings()'
 if [ "${1:-}" = release ]; then
     sources="$(mktemp -d)"
     sh tools/words/fetch_sources.sh "$sources"
@@ -16,7 +16,7 @@ if [ "${1:-}" = release ]; then
     # Also catches new files, which git diff leaves out.
     if [ -n "$(git status --porcelain -- data/words)" ]; then
         git status --short -- data/words
-        echo "data/words difere do que as fontes geram." >&2
+        echo "data/words differs from what the sources build." >&2
         exit 1
     fi
     luajit tools/validate_words.lua

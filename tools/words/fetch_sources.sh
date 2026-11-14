@@ -2,9 +2,9 @@
 # Downloads the word sources at fixed commits into a new, empty folder and checks each file against
 # tools/words/sources.sha256. Updating a source means changing its commit here and its checksum there.
 set -eu
-dest="${1:?uso: fetch_sources.sh <pasta nova e vazia para as fontes>}"
+dest="${1:?usage: fetch_sources.sh <new empty folder for the sources>}"
 if [ -e "$dest" ] && [ -n "$(ls -A "$dest")" ]; then
-    echo "A pasta $dest não está vazia: as fontes vão sempre para uma pasta nova." >&2
+    echo "The folder $dest is not empty: the sources always go to a new folder." >&2
     exit 1
 fi
 mkdir -p "$dest"
@@ -20,7 +20,7 @@ DICTIONARIES=8cfea406b505e4d7df52d5a19bce525df98c54ab
 base=https://raw.githubusercontent.com
 fetch() {
     curl -fsSL --max-time 120 -o "$dest/$2" "$1"
-    echo "baixado: $2"
+    echo "downloaded: $2"
 }
 fetch "$base/fserb/pt-br/$PT_BR/lexico" pt_lexicon
 fetch "$base/fserb/pt-br/$PT_BR/icf" pt_icf
@@ -41,11 +41,11 @@ else
     check() { shasum -a 256 -c "$@"; }
 fi
 if [ "$(ls "$dest" | sort)" != "$(awk '{ print $2 }' "$sums" | sort)" ]; then
-    echo "tools/words/sources.sha256 não lista exatamente os arquivos baixados." >&2
+    echo "tools/words/sources.sha256 does not list exactly the downloaded files." >&2
     exit 1
 fi
 if ! (cd "$dest" && check --quiet "$sums"); then
-    echo "Alguma fonte baixada difere do checksum em tools/words/sources.sha256." >&2
+    echo "A downloaded source differs from its checksum in tools/words/sources.sha256." >&2
     exit 1
 fi
-echo "fontes conferidas: $(wc -l < "$sums" | tr -d ' ') arquivos"
+echo "sources checked: $(wc -l < "$sums" | tr -d ' ') files"

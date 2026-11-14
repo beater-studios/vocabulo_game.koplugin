@@ -1,24 +1,19 @@
+-- The game window. Every screen is laid out on a Canvas (ui/canvas.lua) in the units of the mockups and painted
+-- by this one widget: the title and the pages in ui/pages.lua, the board and the result in ui/game_view.lua.
 local Blitbuffer = require("ffi/blitbuffer")
-local Button = require("ui/widget/button")
-local CenterContainer = require("ui/widget/container/centercontainer")
 local DataStorage = require("datastorage")
 local Device = require("device")
-local Font = require("ui/font")
-local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
-local HorizontalGroup = require("ui/widget/horizontalgroup")
-local HorizontalSpan = require("ui/widget/horizontalspan")
+local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LuaSettings = require("luasettings")
-local TextBoxWidget = require("ui/widget/textboxwidget")
-local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
-local VerticalGroup = require("ui/widget/verticalgroup")
-local VerticalSpan = require("ui/widget/verticalspan")
 local logger = require("logger")
 
+local Canvas = require("vocabulo_game/ui/canvas")
 local Engine = require("vocabulo_game/engine")
 local GameView = require("vocabulo_game/ui/game_view")
+local Pages = require("vocabulo_game/ui/pages")
 local Portrait = require("vocabulo_game/portrait")
 local Refresh = require("vocabulo_game/refresh")
 local State = require("vocabulo_game/state")
@@ -26,9 +21,6 @@ local Words = require("vocabulo_game/words")
 
 local Device_screen = Device.screen
 
-local SERIF = "noto/NotoSerif-Regular.ttf"
-local SERIF_BOLD = "noto/NotoSerif-Bold.ttf"
-local SERIF_ITALIC = "noto/NotoSerif-Italic.ttf"
 local LANGUAGE_NAMES = { pt = "Português", en = "English", es = "Español" }
 local RECENT_FREE_WORDS = 30
 local UPCOMING_DAILY_WORDS = 30
@@ -65,9 +57,8 @@ function Screen:setup()
     self.refresh = Refresh.new(8)
     math.randomseed(os.time())
     self.dimen = Geom:new{ x = 0, y = 0, w = Device_screen:getWidth(), h = Device_screen:getHeight() }
-    self.width, self.height = self.dimen.w, self.dimen.h
-    self.margin = self:scaled(20)
-    self.text_width = self.width - 2 * self.margin
+    self.ges_events = { Tap = { GestureRange:new{ ges = "tap", range = function() return self.dimen end } } }
+    self.cache = {}
     self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/vocabulo_game.lua")
     self.meta = load_table(self.plugin_dir .. "/_meta.lua")
     self.i18n = load_table(self.plugin_dir .. "/data/i18n.lua")
@@ -79,6 +70,7 @@ function Screen:setup()
     self.free_games = saved.free_games
     self.free_stats = saved.free_stats
     self.free_recent = saved.free_recent
+    self.history = saved.history
     self:show_title()
 end
 
@@ -95,16 +87,24 @@ function Screen.open_failed_text(plugin_dir)
     return texts.open_failed
 end
 
-function Screen:scaled(value)
-    return Device_screen:scaleBySize(value)
-end
-
 function Screen:strings()
     return self.i18n[self.lang]
 end
 
+function Screen:language_name(code)
+    return LANGUAGE_NAMES[code] or code
+end
+
 function Screen:config_key()
     return self.lang .. "_" .. self.length
+end
+
+function Screen:stats_for(key)
+    return self.stats[key] or Engine.new_stats()
+end
+
+function Screen:free_stats_for(key)
+    return self.free_stats[key] or { played = 0, won = 0, distribution = {} }
 end
 
 -- Only the lists of the combination in play stay in memory.
@@ -130,82 +130,8 @@ function Screen:save()
     self.settings:saveSetting("free_games", self.free_games)
     self.settings:saveSetting("free_stats", self.free_stats)
     self.settings:saveSetting("free_recent", self.free_recent)
+    self.settings:saveSetting("history", self.history)
     self.settings:flush()
-end
-
--- kind names the layout: the same kind again is a change inside it and is updated without a flash.
-function Screen:set_widget(widget, kind)
-    if self[1] then
-        self[1]:free()
-    end
-    -- Read by tools/koreader/check_layout.lua to catch pages taller than the screen.
-    self.content_height = widget:getSize().h
-    self[1] = widget
-    local mode = self.refresh:mode(kind)
-    UIManager:setDirty(self, function()
-        return mode, self.dimen
-    end)
-end
-
-function Screen:set_page(group, kind)
-    self:set_widget(FrameContainer:new{
-        background = Blitbuffer.COLOR_WHITE,
-        bordersize = 0,
-        padding = 0,
-        margin = 0,
-        width = self.width,
-        height = self.height,
-        group,
-    }, kind)
-    self.content_height = group:getSize().h
-end
-
-function Screen:centered(widget, height)
-    return CenterContainer:new{
-        dimen = Geom:new{ w = self.width, h = height or widget:getSize().h },
-        widget,
-    }
-end
-
-function Screen:text_line(text, face, size)
-    return TextWidget:new{ text = text, face = Font:getFace(face, size), max_width = self.text_width }
-end
-
-function Screen:menu_button(text, callback)
-    return Button:new{
-        text = text,
-        width = self.width - 2 * self:scaled(70),
-        padding_v = self:scaled(8),
-        radius = self:scaled(8),
-        bordersize = self:scaled(2),
-        text_font_face = "cfont",
-        text_font_size = 19,
-        callback = callback,
-    }
-end
-
-function Screen:option_row(options, selected, on_select)
-    local row = HorizontalGroup:new{ align = "center" }
-    local gap = self:scaled(6)
-    local width = math.floor((self.text_width - (#options - 1) * gap) / #options)
-    for i, option in ipairs(options) do
-        if i > 1 then
-            row[#row + 1] = HorizontalSpan:new{ width = gap }
-        end
-        local is_selected = option.value == selected
-        row[#row + 1] = Button:new{
-            text = (is_selected and "• " or "") .. option.label,
-            width = width,
-            padding_v = self:scaled(7),
-            radius = self:scaled(8),
-            bordersize = is_selected and self:scaled(3) or self:scaled(1),
-            text_font_face = "cfont",
-            text_font_bold = is_selected,
-            text_font_size = 17,
-            callback = function() on_select(option.value) end,
-        }
-    end
-    return row
 end
 
 function Screen:saved_game(day)
@@ -215,67 +141,123 @@ function Screen:saved_game(day)
     end
 end
 
-function Screen:show_title()
-    self.mode = "title"
-    local t = self:strings()
-    local group = VerticalGroup:new{ align = "center" }
-    local function add(widget)
-        group[#group + 1] = widget
-    end
-    local function space(value)
-        group[#group + 1] = VerticalSpan:new{ width = self:scaled(value) }
-    end
+-- --- Showing a screen ---
 
-    add(self:centered(self:text_line(t.name, SERIF_BOLD, 36)))
-    space(20)
-    add(self:centered(self:text_line(t.language, SERIF_ITALIC, 18)))
-    space(6)
-    local languages = {}
-    for i, code in ipairs(Words.LANGUAGES) do
-        languages[i] = { value = code, label = LANGUAGE_NAMES[code] }
+-- Where Back goes from the message shown when a screen fails: the title, or out of the game when the title
+-- itself is what failed, so the window can always be closed.
+function Screen:error_back()
+    if self.mode == "title" then
+        return function() self:close() end
     end
-    add(self:centered(self:option_row(languages, self.lang, function(value)
-        self.lang = value
-        self:save()
-        self:show_title()
-    end)))
-    space(14)
-    add(self:centered(self:text_line(t.letters, SERIF_ITALIC, 18)))
-    space(6)
-    local lengths = {}
-    for i, length in ipairs(Words.LENGTHS) do
-        lengths[i] = { value = length, label = tostring(length) }
-    end
-    add(self:centered(self:option_row(lengths, self.length, function(value)
-        self.length = value
-        self:save()
-        self:show_title()
-    end)))
-    space(26)
-
-    local saved = self:saved_game()
-    local play_label = t.play
-    if saved and saved.finished then
-        play_label = t.see_result
-    elseif saved and #saved.guesses > 0 then
-        play_label = t.resume
-    end
-    local free_saved = self.free_games[self:config_key()]
-    local free_label = (free_saved and not free_saved.finished and #free_saved.guesses > 0) and t.free_resume or t.free_play
-    for _, item in ipairs({
-        { play_label, function() self:start_game() end },
-        { free_label, function() self:start_free_game() end },
-        { t.stats, function() self:show_stats(function() self:show_title() end) end },
-        { t.help, function() self:show_help() end },
-        { t.about, function() self:show_about() end },
-        { t.exit, function() UIManager:close(self) end },
-    }) do
-        add(self:centered(self:menu_button(item[1], item[2])))
-        space(8)
-    end
-    self:set_page(CenterContainer:new{ dimen = Geom:new{ w = self.width, h = self.height }, group }, "title")
-    self.content_height = group:getSize().h
+    return function() self:show_title() end
 end
+
+-- Lays out a screen on a new canvas. A layout that fails shows a message with a way back instead.
+function Screen:build(layout)
+    local c = Canvas.new(self.dimen.w, self.dimen.h, self.cache)
+    local ok, err = pcall(layout, self, c)
+    if not ok then
+        logger.warn("vocabulo_game: could not lay out the screen", self.mode, err)
+        c:free()
+        c = Canvas.new(self.dimen.w, self.dimen.h, self.cache)
+        self.failure_back = self:error_back()
+        Pages.error(self, c, self.failure_back)
+        return c, false
+    end
+    return c, true
+end
+
+function Screen:set_canvas(c)
+    if self.canvas then
+        self.canvas:free()
+    end
+    self.canvas = c
+    self.paint_failed = false
+    -- Read by tools/koreader/check_layout.lua.
+    self.content_height = c:content_height()
+    self.layout_problems = c.problems
+end
+
+-- kind names the layout for the e-ink updates: the same kind again is updated without a flash, a new kind (or
+-- every ninth update) flashes.
+function Screen:present(mode, kind, layout)
+    self.mode = mode
+    local c, ok = self:build(layout)
+    if not ok then
+        self.mode, kind = "error", "error"
+    end
+    self:set_canvas(c)
+    local refresh = self.refresh:mode(kind)
+    UIManager:setDirty(self, function()
+        return refresh, self.dimen
+    end)
+end
+
+function Screen:show_title()
+    self:present("title", "title", Pages.title)
+end
+
+-- A language or length picked on the title screen.
+function Screen:choose(field, value)
+    self[field] = value
+    self:save()
+    self:show_title()
+end
+
+function Screen:show_page(kind, layout, back)
+    self.page_back = back
+    self:present("page", kind, layout)
+end
+
+function Screen:show_stats(back)
+    self.stats_lang, self.stats_length = self.lang, self.length
+    self:show_page("stats", Pages.stats, back)
+end
+
+-- A language or length picked on the statistics screen, which does not change the game settings.
+function Screen:choose_stats(field, value)
+    if field == "lang" then
+        self.stats_lang = value
+    else
+        self.stats_length = value
+    end
+    self:present("page", "stats", Pages.stats)
+end
+
+function Screen:show_help(back)
+    self:show_page("page:help", Pages.help, back)
+end
+
+function Screen:show_about()
+    self:show_page("page:about", Pages.about, function() self:show_title() end)
+end
+
+function Screen:show_share(back)
+    self:show_page("share", Pages.share, back)
+end
+
+function Screen:close()
+    UIManager:close(self)
+end
+
+-- Every text laid out on the current screen, for the checks.
+function Screen:shown_texts()
+    local texts = {}
+    for _, item in ipairs(self.canvas and self.canvas.items or {}) do
+        if item.widget and item.widget.text then
+            texts[#texts + 1] = item.widget.text
+        end
+    end
+    return texts
+end
+
+-- The screen rectangle of a tap area by its id, for the checks and the random taps.
+function Screen:hit_rect(id)
+    local hit = self.canvas and self.canvas:hit_by_id(id)
+    return hit and hit.rect
+end
+
+-- --- The game ---
 
 -- The day is kept when coming back from the statistics, even if the date changed meanwhile.
 function Screen:start_game(day)
@@ -310,203 +292,208 @@ function Screen:start_free_game()
     self:open_game{ answer = saved.answer, saved = saved, free_play = true }
 end
 
+-- Back to the game left for the help page, as it was, with the letters being typed.
+function Screen:reopen_game()
+    self.refresh:reset()
+    self:show_game("game")
+end
+
 function Screen:open_game(opts)
-    self.mode = "game"
     self.free_play = opts.free_play or false
-    local answer = opts.answer
     self.engine = Engine.new{
         lang = self.lang,
         length = self.length,
         day = opts.day,
-        answer = answer,
+        answer = opts.answer,
         is_valid = self:word_lists().is_valid,
     }
     if opts.saved then
         self.engine:restore(opts.saved)
     end
-    local answer_letters = Engine.split(answer)
-    for i, letter in ipairs(answer_letters) do
-        answer_letters[i] = Engine.upper(letter)
-    end
-    self.view = GameView:new{
-        engine = self.engine,
-        strings = self:strings(),
-        width = self.width,
-        height = self.height,
-        answer_letters = answer_letters,
-        free_play = self.free_play,
-        on_new_word = function() self:start_free_game() end,
-        on_change = function(change) self:on_game_change(change) end,
-        on_back = function() self:show_title() end,
-        on_share = function() self:share_result() end,
-        on_stats = function() self:show_stats(function() self:start_game(opts.day) end) end,
-    }
-    self.view.message = self:game_message()
+    self.message, self.message_dark = self:game_message(), false
     -- Every game opens with a full update, even a new word from the result of the last one.
     self.refresh:reset()
-    self:set_widget(self.view, "game")
+    self:show_game("game")
+end
+
+function Screen:show_game(kind)
+    if self.engine:is_over() then
+        self:present("game", "result", GameView.layout_result)
+    else
+        self:present("game", kind, function(screen, c)
+            screen.geom = GameView.layout_play(screen, c)
+        end)
+    end
 end
 
 function Screen:game_message()
-    local engine = self.engine
-    local t = self:strings()
-    if engine:is_won() then
-        return string.format(t.won, #engine.guesses)
-    elseif engine:is_over() then
-        return string.format(t.lost, table.concat(self.view.answer_letters))
-    end
-    return string.format(t.attempt, #engine.guesses + 1, Engine.ATTEMPTS)
+    return string.format(self:strings().attempt, #self.engine.guesses + 1, Engine.ATTEMPTS)
 end
 
-function Screen:refresh_view(mode, rect)
-    UIManager:setDirty(self, function()
-        return mode, rect
+-- A change inside the board: only the row being typed, and the message if it changed, reach the e-ink screen.
+function Screen:update_play(rows, message_changed)
+    local c, ok = self:build(function(screen, canvas)
+        screen.geom = GameView.layout_play(screen, canvas)
     end)
-end
-
-function Screen:on_game_change(change)
-    local view, engine = self.view, self.engine
-    if change == "letter" then
-        local message = self:game_message()
-        if message ~= view.message then
-            view.message = message
-            self:refresh_view("ui", view:message_rect())
-        end
-        self:refresh_view("ui", view:row_rect(#engine.guesses + 1))
+    self:set_canvas(c)
+    if not ok then
+        self.mode = "error"
+        UIManager:setDirty(self, function() return "full", self.dimen end)
         return
     end
+    for _, row in ipairs(rows) do
+        local rect = GameView.row_rect(c, self.geom, row)
+        UIManager:setDirty(self, function() return "ui", rect end)
+    end
+    if message_changed then
+        local rect = GameView.message_rect(c)
+        UIManager:setDirty(self, function() return "ui", rect end)
+    end
+end
+
+function Screen:set_message(text, dark)
+    local changed = text ~= self.message or dark ~= self.message_dark
+    self.message, self.message_dark = text, dark
+    return changed
+end
+
+function Screen:press(id)
+    local engine = self.engine
+    if not engine or engine:is_over() then
+        return
+    end
+    if id == "submit" then
+        self:submit()
+        return
+    end
+    local changed
+    if id == "backspace" then
+        changed = engine:remove_letter()
+    else
+        changed = engine:add_letter(id)
+    end
+    if changed then
+        -- The warning of a word not accepted goes away as soon as the player types again.
+        local message_changed = self:set_message(self:game_message(), false)
+        self:update_play({ #engine.guesses + 1 }, message_changed)
+    end
+end
+
+-- Keeps the last days of results of a combination, enough for the statistics calendar.
+local HISTORY_DAYS = 70
+
+function Screen:record_daily(key, engine)
+    local stats = self:stats_for(key)
+    local before = stats.last_day
+    local won = engine:is_won()
+    Engine.record_result(stats, engine.day, won, #engine.guesses)
+    if stats.last_day ~= before then
+        stats.last_attempts = won and #engine.guesses or nil
+        local history = self.history[key] or {}
+        history[engine.day] = won and "w" or "l"
+        for day in pairs(history) do
+            if day <= engine.day - HISTORY_DAYS then
+                history[day] = nil
+            end
+        end
+        self.history[key] = history
+    end
+    self.stats[key] = stats
+end
+
+function Screen:record_free(key, engine)
+    local stats = self:free_stats_for(key)
+    stats.played = stats.played + 1
+    if engine:is_won() then
+        stats.won = stats.won + 1
+        stats.distribution[#engine.guesses] = (stats.distribution[#engine.guesses] or 0) + 1
+    end
+    self.free_stats[key] = stats
+end
+
+function Screen:submit()
+    local engine = self.engine
     local ok, reason = engine:submit()
     if reason == "over" then
         return
     end
     if not ok then
         local t = self:strings()
-        view.message = reason == "short" and t.short or t.unknown
-        self:refresh_view("ui", view:message_rect())
+        local changed = self:set_message(reason == "short" and t.short or t.unknown, true)
+        self:update_play({}, changed)
         return
     end
     local key = self:config_key()
     if self.free_play then
         self.free_games[key] = State.record(engine, engine:is_over(), false)
         if engine:is_over() then
-            local stats = self.free_stats[key] or { played = 0, won = 0 }
-            stats.played = stats.played + 1
-            stats.won = stats.won + (engine:is_won() and 1 or 0)
-            self.free_stats[key] = stats
+            self:record_free(key, engine)
         end
     else
         self.games[key] = State.record(engine, engine:is_over(), true)
         if engine:is_over() then
-            self.stats[key] = Engine.record_result(self.stats[key] or Engine.new_stats(), engine.day, engine:is_won(), #engine.guesses)
+            self:record_daily(key, engine)
         end
     end
     self:save()
-    view.message = self:game_message()
+    self:set_message(self:game_message(), false)
     -- The end of a game always flashes; the attempts before it count towards the next full update.
-    if engine:is_over() then
-        self.refresh:reset()
+    self:show_game("game")
+end
+
+-- --- Painting and input ---
+
+-- An error while painting would repeat on every paint and leave the screen unusable, so the screen is painted
+-- protected, and after a failure only the way back answers taps.
+function Screen:paintTo(bb, x, y)
+    self.dimen.x, self.dimen.y = x, y
+    bb:paintRect(x, y, self.dimen.w, self.dimen.h, Blitbuffer.COLOR_WHITE)
+    if not self.canvas then
+        return
     end
-    self:refresh_view(self.refresh:mode("game"), self.dimen)
-end
-
-function Screen:share_result()
-    local QRMessage = require("ui/widget/qrmessage")
-    UIManager:show(QRMessage:new{ text = self.engine:share_text(self:strings().share_title) })
-end
-
-function Screen:show_page(title, items, back)
-    self.mode = "page"
-    self.page_back = back
-    local t = self:strings()
-    local group = VerticalGroup:new{ align = "center" }
-    group[#group + 1] = self:centered(self:text_line(title, SERIF_BOLD, 26), self:scaled(60))
-    for _, item in ipairs(items) do
-        local body = VerticalGroup:new{ align = "left" }
-        local inner_width = self.text_width - 2 * self:scaled(10) - 2 * self:scaled(2)
-        if item.title then
-            body[#body + 1] = TextBoxWidget:new{ text = item.title, face = Font:getFace(SERIF_BOLD, 18), width = inner_width }
-        end
-        if item.meta then
-            body[#body + 1] = TextBoxWidget:new{ text = item.meta, face = Font:getFace(SERIF_ITALIC, 14), width = inner_width }
-        end
-        if item.text then
-            body[#body + 1] = TextBoxWidget:new{ text = item.text, face = Font:getFace(SERIF, 16), width = inner_width }
-        end
-        group[#group + 1] = self:centered(FrameContainer:new{
-            width = self.text_width,
-            padding = self:scaled(10),
-            bordersize = self:scaled(2),
-            radius = self:scaled(8),
-            background = Blitbuffer.COLOR_WHITE,
-            body,
-        })
-        group[#group + 1] = VerticalSpan:new{ width = self:scaled(8) }
+    local ok, err = pcall(self.canvas.paint, self.canvas, bb, x, y)
+    if ok then
+        return
     end
-    group[#group + 1] = VerticalSpan:new{ width = self:scaled(6) }
-    group[#group + 1] = self:centered(self:menu_button(t.back, back))
-    self:set_page(group, "page:" .. title)
-end
-
-function Screen:show_help()
-    self:show_page(self:strings().help, self:strings().help_items, function() self:show_title() end)
-end
-
-local function bare_url(url)
-    return (url:gsub("^https?://", ""):gsub("/$", ""))
-end
-
-function Screen:show_about()
-    self:show_page(self:strings().about, self:about_items(), function() self:show_title() end)
-end
-
-function Screen:about_items()
-    local t = self:strings()
-    return {
-        {
-            title = t.name,
-            meta = string.format(t.version, self.meta.version),
-            text = string.format("%s\n%s\n%s", string.format(t.by, self.meta.author), bare_url(self.meta.website), self.meta.copyright),
-        },
-        { title = t.source_title, text = bare_url(self.meta.homepage) },
-        { title = t.license_title, text = t.license },
-        { title = t.sources_title, text = t.sources },
-        { title = t.warranty_title, text = t.warranty },
-    }
-end
-
-function Screen:show_stats(back)
-    local t = self:strings()
-    local stats = self.stats[self:config_key()] or Engine.new_stats()
-    local win_rate = stats.played > 0 and math.floor(stats.won * 100 / stats.played + 0.5) or 0
-    local lines = {
-        string.format("%s: %d", t.played, stats.played),
-        string.format("%s: %d%%", t.win_rate, win_rate),
-        string.format("%s: %d", t.streak, Engine.current_streak(stats, Engine.today())),
-        string.format("%s: %d", t.best_streak, stats.best_streak),
-    }
-    local free = self.free_stats[self:config_key()] or { played = 0, won = 0 }
-    local bars = {}
-    for attempt = 1, Engine.ATTEMPTS do
-        local count = stats.distribution[attempt] or 0
-        bars[attempt] = string.format("%d: %s %d", attempt, string.rep("■", math.min(count, 20)), count)
+    logger.warn("vocabulo_game: could not draw the screen", self.mode, err)
+    bb:paintRect(x, y, self.dimen.w, self.dimen.h, Blitbuffer.COLOR_WHITE)
+    if not self.paint_failed then
+        if self.failed_canvas then
+            self.failed_canvas:free()
+        end
+        self.failed_canvas = Canvas.new(self.dimen.w, self.dimen.h, self.cache)
+        self.failure_back = self:error_back()
+        Pages.error(self, self.failed_canvas, self.failure_back)
+        self.paint_failed = true
+        -- The update that failed may have been a single row, so the message would not reach the e-ink screen.
+        UIManager:nextTick(function()
+            UIManager:setDirty(self, "full")
+        end)
     end
-    self:show_page(t.stats, {
-        { title = string.format("%s · %s", LANGUAGE_NAMES[self.lang], string.format(t.letters_count, self.length)), text = table.concat(lines, "\n") },
-        { title = t.distribution, text = table.concat(bars, "\n") },
-        { title = t.free_play, text = string.format("%s: %d\n%s: %d", t.played, free.played, t.wins, free.won) },
-    }, back)
+    self.failed_canvas:paint(bb, x, y)
+end
+
+function Screen:onTap(_, ges)
+    local canvas = self.paint_failed and self.failed_canvas or self.canvas
+    local hit = canvas and canvas:hit_at(ges.pos.x - self.dimen.x, ges.pos.y - self.dimen.y)
+    if hit then
+        hit.action()
+    end
+    return true
 end
 
 Screen.onSetRotationMode = Portrait.ignore_rotation
 
 -- The device Back key goes back one screen, and closes the game from the title screen.
 function Screen:onBack()
-    if self.mode == "game" then
+    if self.paint_failed or self.mode == "error" then
+        self.failure_back()
+    elseif self.mode == "game" then
         self:show_title()
     elseif self.mode == "page" then
         self.page_back()
     else
-        UIManager:close(self)
+        self:close()
     end
     return true
 end
@@ -514,7 +501,7 @@ end
 -- KOReader sends Close to every window before it quits (USB mode on a Kobo, closing the window on a computer).
 function Screen:onClose(arg)
     if not (arg and arg.keep_screensaver) then
-        UIManager:close(self)
+        self:close()
     end
 end
 
@@ -524,10 +511,15 @@ function Screen:onResume()
 end
 
 function Screen:onCloseWidget()
-    if self[1] then
-        self[1]:free()
-        self[1] = nil
+    if self.canvas then
+        self.canvas:free()
     end
+    if self.failed_canvas then
+        self.failed_canvas:free()
+    end
+    self.canvas, self.failed_canvas = nil, nil
+    Canvas.free_cache(self.cache)
+    self.cache = {}
     self.lists = nil
     Portrait.close(self)
     UIManager:setDirty(nil, "full")

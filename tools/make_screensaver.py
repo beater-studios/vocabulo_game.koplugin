@@ -36,19 +36,24 @@ def centered_text(draw, cx, cy, text, face, fill):
     draw.text((cx * SCALE, cy * SCALE), text, font=face, fill=fill, anchor="mm")
 
 
+# The tiles of the game: rounded, and a letter in another place also gets a black corner.
 def tile(draw, x, y, size, letter, mark, face):
     box = [x * SCALE, y * SCALE, (x + size) * SCALE, (y + size) * SCALE]
+    radius = 7 * SCALE
     if mark == "correct":
-        draw.rectangle(box, fill=BLACK)
+        draw.rounded_rectangle(box, radius=radius, fill=BLACK)
         color = WHITE
     elif mark == "present":
-        draw.rectangle(box, fill=GRAY, outline=BLACK, width=2 * SCALE)
+        draw.rounded_rectangle(box, radius=radius, fill=GRAY, outline=BLACK, width=2 * SCALE)
+        corner = size * 0.26
+        draw.polygon([((x + size - corner) * SCALE, (y + 2) * SCALE), ((x + size - 2) * SCALE, (y + 2) * SCALE),
+                      ((x + size - 2) * SCALE, (y + corner) * SCALE)], fill=BLACK)
         color = BLACK
     elif mark == "absent":
-        draw.rectangle(box, fill=WHITE, outline=LIGHT, width=2 * SCALE)
+        draw.rounded_rectangle(box, radius=radius, fill=WHITE, outline=LIGHT, width=2 * SCALE)
         color = 136
     else:
-        draw.rectangle(box, fill=WHITE, outline=LIGHT, width=2 * SCALE)
+        draw.rounded_rectangle(box, radius=radius, fill=WHITE, outline=LIGHT, width=2 * SCALE)
         return
     centered_text(draw, x + size / 2, y + size / 2 + 2, letter, face, color)
 
@@ -56,7 +61,7 @@ def tile(draw, x, y, size, letter, mark, face):
 def main():
     koreader = os.environ.get("KOREADER_DIR")
     if not koreader:
-        sys.exit("Defina KOREADER_DIR com a pasta do KOReader, que tem as fontes Noto.")
+        sys.exit("Set KOREADER_DIR to the KOReader folder, which has the Noto fonts.")
     image = Image.new("L", (W * SCALE, H * SCALE), WHITE)
     draw = ImageDraw.Draw(image)
 
@@ -79,7 +84,7 @@ def main():
     small = small.point(lambda v: round(v / 17) * 17)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     small.save(OUT, optimize=True)
-    print(f"Imagem gerada: {os.path.relpath(OUT, os.getcwd())}")
+    print(f"Image generated: {os.path.relpath(OUT, os.getcwd())}")
 
 
 if __name__ == "__main__":

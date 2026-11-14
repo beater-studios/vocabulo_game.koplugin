@@ -7,7 +7,6 @@ local DataStorage = require("datastorage")
 local UIManager = require("ui/uimanager")
 local Engine = require("vocabulo_game/engine")
 local GameScreen = require("vocabulo_game/ui/screen")
-local GameView = require("vocabulo_game/ui/game_view")
 local SavedState = require("vocabulo_game/saved_state")
 local Words = require("vocabulo_game/words")
 
@@ -16,8 +15,8 @@ Engine.today = function() return 312 end
 
 local settings_file = DataStorage:getSettingsDir() .. "/vocabulo_game.lua"
 local taps, modes = 0, {}
-local real_tap = GameView.onTap
-GameView.onTap = function(...)
+local real_tap = GameScreen.onTap
+GameScreen.onTap = function(...)
     taps = taps + 1
     return real_tap(...)
 end
@@ -39,15 +38,18 @@ local function fresh_screen(f, lang, length)
     return new
 end
 
+-- The screen catches its own layout and painting errors and shows a message instead, so the module would never
+-- see them: a step that leaves the screen there is an error.
+local function check_screen(f)
+    if f.screen.mode == "error" or f.screen.paint_failed then
+        error("the screen could not be drawn (mode " .. tostring(f.screen.mode) .. "), see the log above")
+    end
+end
+
 local function tap_rect(f, rect)
     f:tap(rect.x + math.floor(rect.w / 2), rect.y + math.floor(rect.h / 2))
 end
 
-local function key_rect(view, id)
-    for _, key in ipairs(view.keys) do
-        if key.id == id then return key end
-    end
-end
 
 local function game_step(f)
     local game = f.screen
@@ -56,12 +58,13 @@ local function game_step(f)
         local answers = game:word_lists().answers
         local word = f.random(1, 10) == 1 and game.engine.answer or answers[f.random(1, #answers)]
         for _, letter in ipairs(Engine.split(Engine.plain(word, game.lang))) do
-            tap_rect(f, key_rect(game.view, letter))
+            tap_rect(f, game:hit_rect(letter))
         end
-        tap_rect(f, key_rect(game.view, "submit"))
+        tap_rect(f, game:hit_rect("submit"))
     else
         f:touch()
     end
+    check_screen(f)
 end
 
 local function left_game(f)
@@ -79,6 +82,7 @@ for _, lang in ipairs(Words.LANGUAGES) do
         step = function(f)
             modes[f.screen.mode] = true
             f:touch()
+            check_screen(f)
         end,
     }
 end
@@ -112,5 +116,5 @@ end
 local visited = {}
 for mode in pairs(modes) do visited[#visited + 1] = mode end
 table.sort(visited)
-print(string.format("%d taps reached the game view; screens visited: %s", taps, table.concat(visited, ", ")))
+print(string.format("%d taps reached the game screen; screens visited: %s", taps, table.concat(visited, ", ")))
 fuzz:finish()
